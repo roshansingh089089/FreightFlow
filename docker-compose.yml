@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: freightflow
+      POSTGRES_USER: freightflow
+      POSTGRES_PASSWORD: freightflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - freightflow_pg:/var/lib/postgresql/data
+volumes:
+  freightflow_pg:

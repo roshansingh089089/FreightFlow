@@ -1,0 +1,33 @@
+server:
+  port: ${PORT:8080}
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/freightflow}
+    username: ${DATABASE_USER:freightflow}
+    password: ${DATABASE_PASSWORD:freightflow}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_TLS_ENABLED:false}
+      mail.smtp.starttls.required: ${SMTP_TLS_REQUIRED:false}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+app:
+  jwt-secret: ${JWT_SECRET}
+  cookie-secure: ${COOKIE_SECURE:false}
+  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+  smtp-from: ${SMTP_FROM:no-reply@freightflow.local}
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
