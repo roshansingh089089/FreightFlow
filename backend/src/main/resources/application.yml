@@ -1,10 +1,6 @@
 server:
   port: ${PORT:8080}
 spring:
-  datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/freightflow}
-    username: ${DATABASE_USER:freightflow}
-    password: ${DATABASE_PASSWORD:freightflow}
   jpa:
     hibernate:
       ddl-auto: validate
