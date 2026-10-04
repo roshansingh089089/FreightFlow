@@ -1,10 +1,11 @@
+import {apiFetch} from './api';
 import {useEffect,useState} from 'react';
 import {Link,useLocation} from 'react-router-dom';
 import {ArrowRight,Copy,Search,Sparkles,X} from 'lucide-react';
 import './ai.css';
 
 type Action={label:string,path:string,body?:unknown};
-async function aiPost(path:string,body:unknown={}){const response=await fetch('/api/ai'+path,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.message||'AI is temporarily unavailable. You can continue manually.');return data}
+async function aiPost(path:string,body:unknown={}){const response=await apiFetch('/ai'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.message||'AI is temporarily unavailable. You can continue manually.');return data}
 export function AiActionCard({title,description,actions}:{title:string,description?:string,actions:Action[]}){
  const [working,setWorking]=useState('');const [error,setError]=useState('');const [output,setOutput]=useState<any>(null);
  const run=async(action:Action)=>{setWorking(action.label);setError('');setOutput(null);try{setOutput(await aiPost(action.path,action.body))}catch(e:any){setError(e.message)}finally{setWorking('')}};
