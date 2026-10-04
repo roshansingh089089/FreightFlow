@@ -38,7 +38,7 @@ Open http://localhost:5173 and create a company account. The first user is its A
 
 ## Email setup
 
-Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_AUTH`, and `SMTP_TLS_ENABLED` in `.env`. For Gmail, use `smtp.gmail.com`, port `587`, TLS and TLS required `true`, auth `true`, your full Gmail address for both `SMTP_USERNAME` and `SMTP_FROM`, and a Google app password for `SMTP_PASSWORD` (not your normal Google password). Enable 2-Step Verification in your Google Account to create an app password. After editing `.env`, restart the backend; the running process does not reload environment variables. If `SMTP_PASSWORD` is blank, the send endpoint reports `SMTP_NOT_CONFIGURED` and leaves the quotation as a draft. A generic SMTP provider can use its own host, port, and credentials. Keep `.env` private. Creating or editing a quotation never sends mail. The employee must open **Email Quote**, review the fields, then click **Send Email**. Failed attempts are recorded without marking the quotation SENT.
+Verify a sending domain in Resend and configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in the backend environment. The sender address must use that verified domain. For local development, add those values to the private root `.env` and restart the backend after editing it. If either value is blank, the send endpoint reports `EMAIL_NOT_CONFIGURED` and leaves the quotation as a draft. Keep `.env` private. Creating or editing a quotation never sends mail. The employee must open **Email Quote**, review the To, CC, subject, body, and PDF attachment, then click **Send Email**. Failed attempts are recorded without marking the quotation SENT. Provider failures return a generic `EMAIL_FAILED` response while the provider's error is logged by the backend.
 
 For HTTPS deployments set `COOKIE_SECURE=true`, set `FRONTEND_ORIGIN` to the exact frontend origin, and supply a long random `JWT_SECRET`. The auth token is stored only in an HttpOnly SameSite cookie.
 
@@ -59,7 +59,7 @@ cd frontend && npm run build
 
 ## Structure
 
-- `backend`: Spring Boot REST API, JPA entities, Flyway schema, PDF and SMTP services
+- `backend`: Spring Boot REST API, JPA entities, Flyway schema, PDF and HTTPS email services
 - `frontend`: React, Vite, TypeScript, TanStack Query, React Hook Form, Zod, Tailwind
 - `docker-compose.yml`: PostgreSQL only
 
