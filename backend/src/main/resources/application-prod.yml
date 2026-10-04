@@ -3,3 +3,11 @@ spring:
     url: ${DATABASE_URL}
     username: ${DATABASE_USER}
     password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
+server:
+  tomcat:
+    threads:
+      max: 20
+      min-spare: 2
