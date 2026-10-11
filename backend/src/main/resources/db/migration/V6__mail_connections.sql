@@ -1,0 +1,18 @@
+alter table gmail_connections rename to mail_connections;
+update mail_connections set provider = 'GMAIL_API' where provider = 'GMAIL';
+alter table mail_connections alter column access_token drop not null;
+alter table mail_connections alter column refresh_token drop not null;
+alter table mail_connections alter column token_expiry drop not null;
+alter table mail_connections add column active boolean not null default true;
+alter table mail_connections add column imap_host varchar(255);
+alter table mail_connections add column imap_port integer;
+alter table mail_connections add column imap_username varchar(255);
+alter table mail_connections add column imap_password_encrypted text;
+alter table mail_connections add column imap_security_mode varchar(24);
+alter table mail_connections add column smtp_host varchar(255);
+alter table mail_connections add column smtp_port integer;
+alter table mail_connections add column smtp_username varchar(255);
+alter table mail_connections add column smtp_password_encrypted text;
+alter table mail_connections add column smtp_security_mode varchar(24);
+alter table mail_connections add column smtp_from varchar(255);
+create unique index uq_mail_connections_active_user on mail_connections(tenant_id,user_id) where active;
