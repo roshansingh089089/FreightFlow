@@ -37,9 +37,15 @@ class QuotationDocumentServiceTest {
     var addresses = mock(AddressRepo.class);
     var tenants = mock(TenantRepo.class);
     var users = mock(UserRepo.class);
+    var locations = mock(com.freightflow.reference.LocationSearchService.class);
+    var finalPlace = new com.freightflow.reference.Location();
+    finalPlace.setCode("INBOM");
+    finalPlace.setName("Mumbai");
+    when(locations.require("INBOM", "ALL")).thenReturn(finalPlace);
     var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
     var service =
-        new QuotationDocumentService(lookup, lines, contacts, addresses, tenants, users, mapper);
+        new QuotationDocumentService(
+            lookup, lines, contacts, addresses, tenants, users, mapper, locations);
     UUID tenantId = UUID.randomUUID();
     UUID customerId = UUID.randomUUID();
     UUID authorId = UUID.randomUUID();
@@ -54,7 +60,7 @@ class QuotationDocumentServiceTest {
     quotation.setValidUntil(LocalDate.of(2026, 10, 31));
     quotation.setTermsAndConditions("Rates subject to availability.");
     quotation.setShipmentSnapshot(
-        "{\"mode\":\"OCEAN\",\"origin\":\"Bangkok\",\"destination\":\"Nhava Sheva\",\"commodity\":\"Machinery\",\"incoterm\":\"CIF\"}");
+        "{\"mode\":\"OCEAN\",\"origin\":\"Bangkok\",\"destination\":\"Nhava Sheva\",\"podCode\":\"INNSA\",\"fpodCode\":\"INBOM\",\"commodity\":\"Machinery\",\"incoterm\":\"CIF\"}");
     Customer customer = new Customer();
     customer.setId(customerId);
     customer.setCompanyName("Long Address Exporters");
@@ -95,10 +101,16 @@ class QuotationDocumentServiceTest {
         .thenReturn(List.of(usd, eur));
 
     service.freeze(quotation);
+    var legacyDocument =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            mapper.readTree(quotation.getDocumentSnapshot());
+    legacyDocument.remove("finalDestination");
+    quotation.setDocumentSnapshot(mapper.writeValueAsString(legacyDocument));
     customer.setCompanyName("Changed after finalization");
     quotation.setStatus("SENT");
     var document = service.document(quotation);
     assertEquals("SENT", document.status());
+    assertEquals("Mumbai", document.finalDestination());
     assertEquals("Long Address Exporters", document.customerName());
     assertTrue(document.customerAddress().contains("North Sathorn Road"));
     assertEquals(2, document.charges().size());
@@ -128,6 +140,7 @@ class QuotationDocumentServiceTest {
     assertTrue(text.contains(document.charges().get(1).description()));
     assertTrue(text.contains("148.00"));
     assertTrue(text.contains("ECB_REFERENCE"));
+    assertTrue(text.contains("Final place of delivery: Mumbai"));
     assertTrue(text.contains(document.terms()));
   }
 
@@ -147,7 +160,8 @@ class QuotationDocumentServiceTest {
             addresses,
             tenants,
             users,
-            new ObjectMapper().registerModule(new JavaTimeModule()));
+            new ObjectMapper().registerModule(new JavaTimeModule()),
+            mock(com.freightflow.reference.LocationSearchService.class));
     Quotation quotation = new Quotation();
     quotation.setTenantId(UUID.randomUUID());
     quotation.setCustomerId(UUID.randomUUID());

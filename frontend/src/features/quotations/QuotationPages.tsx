@@ -33,6 +33,7 @@ import {
 } from '../../shared/lib/workspace';
 import { AiActionCard } from '../ai/AiAssist';
 import QuotationDirectory from './QuotationDirectory';
+import { formatQuotationRoute, useResolvedFinalPlace } from './quotationRoute';
 function shipmentSnapshot(value?: string | null): Record<string, any> | null {
   if (!value) return null;
   try {
@@ -88,6 +89,22 @@ export function QuoteForm() {
     fpodName: '',
   });
   const seededRoute = useRef('');
+  const resolvedFinalName = useResolvedFinalPlace(
+    route.fpodCode,
+    route.fpodName,
+  );
+  useEffect(() => {
+    if (
+      resolvedFinalName &&
+      route.fpodName === route.fpodCode &&
+      resolvedFinalName !== route.fpodCode
+    )
+      setRoute((current) =>
+        current.fpodCode === route.fpodCode
+          ? { ...current, fpodName: resolvedFinalName }
+          : current,
+      );
+  }, [resolvedFinalName, route.fpodCode, route.fpodName]);
   const seededScope = useRef('');
   useEffect(() => {
     if (id && existing.data) {
@@ -172,7 +189,7 @@ export function QuoteForm() {
       polName: e.portOfLoading || e.airportOfOrigin || e.origin || '',
       podName:
         e.portOfDischarge || e.airportOfDestination || e.destination || '',
-      fpodName: e.fpodCode || '',
+      fpodName: e.fpodName || e.fpodCode || '',
     });
   }, [e, enquiryId, id]);
   const shipmentMode =
@@ -185,8 +202,16 @@ export function QuoteForm() {
       : 'OCEAN';
   const shipmentChange = (field: string, value: any) =>
     setShipment((current) => ({ ...current, [field]: value }));
+  const routeDisplay = formatQuotationRoute(
+    { code: route.polCode, name: route.polName },
+    { code: route.podCode, name: route.podName },
+    { code: route.fpodCode, name: resolvedFinalName },
+  );
   const shipmentFacts = [
     ['Mode', shipmentMode],
+    ['POL', route.polCode ? routeDisplay.loading : null],
+    ['POD', route.podCode ? routeDisplay.discharge : null],
+    ['FPOD', routeDisplay.finalPlace],
     ['Incoterm', quoteIncoterm],
     ['Cargo ready', e?.readyDate ? date(e.readyDate) : null],
     ['Commodity', e?.commodity],
@@ -196,9 +221,42 @@ export function QuoteForm() {
     ([, value]) => value !== null && value !== undefined && value !== '',
   );
   const change = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const changeRouteLocation = (
+    field: 'pol' | 'pod' | 'fpod',
+    name: string,
+    code: string,
+  ) => {
+    const codeKey = `${field}Code` as 'polCode' | 'podCode' | 'fpodCode';
+    const nameKey = `${field}Name` as 'polName' | 'podName' | 'fpodName';
+    const affectsHaulage =
+      (field === 'pod' || field === 'fpod') && route[codeKey] !== code;
+    const haulage = affectsHaulage
+      ? form.lines.filter(
+          (line: any) => line.description === 'Haulage to final place',
+        )
+      : [];
+    if (
+      haulage.some((line: any) => Number(line.unitPrice) > 0) &&
+      !window.confirm(
+        'Changing this location will remove the priced haulage to final place charge. Continue?',
+      )
+    )
+      return;
+    if (haulage.length) {
+      setForm((current: any) => ({
+        ...current,
+        lines: current.lines.filter(
+          (line: any) => line.description !== 'Haulage to final place',
+        ),
+      }));
+      setScopeCustomized(true);
+      toast('Haulage to final place removed; review pricing for the new route');
+    }
+    setRoute((current) => ({ ...current, [nameKey]: name, [codeKey]: code }));
+  };
   const scopeOptions = meridianScopeOptions(
     transportMode,
-    !!route.fpodCode,
+    !!routeDisplay.finalPlace,
   ).map(({ description }) => description);
   const currencyOptions = [
     ...new Set(
@@ -209,7 +267,11 @@ export function QuoteForm() {
       ].filter(Boolean),
     ),
   ];
-  const resetScope = (term = quoteIncoterm, mode = shipmentMode) => {
+  const resetScope = (
+    term = quoteIncoterm,
+    mode = shipmentMode,
+    hasFinalPlace = !!routeDisplay.finalPlace,
+  ) => {
     const mappedMode = ['FTL', 'LTL'].includes(mode)
       ? 'ROAD'
       : mode === 'AIR'
@@ -222,11 +284,7 @@ export function QuoteForm() {
         ),
       ),
     );
-    const defaults = defaultScopeDescriptions(
-      term,
-      mappedMode,
-      !!route.fpodCode,
-    );
+    const defaults = defaultScopeDescriptions(term, mappedMode, hasFinalPlace);
     setForm((current: any) => ({
       ...current,
       lines: [
@@ -293,7 +351,7 @@ export function QuoteForm() {
       podName: '',
       fpodName: '',
     }));
-    resetScope(quoteIncoterm, mode);
+    resetScope(quoteIncoterm, mode, false);
   };
   const additionalServices = [
     'Fumigation',
@@ -488,7 +546,7 @@ export function QuoteForm() {
       <div className="card quote-summary">
         <strong>{e?.customerName || 'Enquiry'}</strong>
         <span>
-          {e?.origin} → {e?.destination} · {e?.mode} · {e?.commodity}
+          {routeDisplay.label} · {e?.mode} · {e?.commodity}
         </span>
       </div>
       <div className="quote-builder-grid">
@@ -538,18 +596,14 @@ export function QuoteForm() {
                           value={route[nameKey]}
                           code={route[codeKey]}
                           onTextChange={(value) =>
-                            setRoute((current) => ({
-                              ...current,
-                              [nameKey]: value,
-                              [codeKey]: '',
-                            }))
+                            changeRouteLocation(field, value, '')
                           }
                           onSelect={(location: LocationOption) =>
-                            setRoute((current) => ({
-                              ...current,
-                              [nameKey]: location.name,
-                              [codeKey]: location.code,
-                            }))
+                            changeRouteLocation(
+                              field,
+                              location.name,
+                              location.code,
+                            )
                           }
                         />
                       );
@@ -1226,9 +1280,7 @@ export function QuoteForm() {
         <aside className="card quote-live-preview">
           <span className="cw-eyebrow">LIVE QUOTATION SUMMARY</span>
           <h2>{e?.customerName || 'Customer quotation'}</h2>
-          <p>
-            {e?.origin || 'Origin'} → {e?.destination || 'Destination'}
-          </p>
+          <p>{routeDisplay.label}</p>
           <div className="quote-preview-lines">
             {form.lines.map((line: any, index: number) => (
               <div key={index}>
@@ -1318,6 +1370,27 @@ export function QuoteDetail() {
   const shipment =
     shipmentSnapshot(q.data?.quotation?.shipmentSnapshot) ||
     q.data?.enquiry?.enquiry;
+  const finalPlaceName = useResolvedFinalPlace(
+    shipment?.fpodCode,
+    shipment?.fpodName,
+  );
+  const detailRoute = formatQuotationRoute(
+    {
+      code: shipment?.polCode,
+      name:
+        shipment?.portOfLoading ||
+        shipment?.airportOfOrigin ||
+        shipment?.origin,
+    },
+    {
+      code: shipment?.podCode,
+      name:
+        shipment?.portOfDischarge ||
+        shipment?.airportOfDestination ||
+        shipment?.destination,
+    },
+    { code: shipment?.fpodCode, name: finalPlaceName },
+  );
   const [compose, setCompose] = useState<any>(null);
   const [replySource, setReplySource] = useState('');
   const [mailChoices, setMailChoices] = useState<
@@ -1471,9 +1544,12 @@ export function QuoteDetail() {
           <h2 className="font-bold mb-4">Quotation details</h2>
           <p>Valid until: {date(q.data?.validUntil)}</p>
           <p>Transit time: {q.data?.quotation?.transitTimeText || '—'}</p>
-          <p className="mt-4 text-sm text-slate-500">
-            {shipment?.origin} → {shipment?.destination}
-          </p>
+          <p className="mt-4 text-sm text-slate-500">{detailRoute.label}</p>
+          <p className="text-sm">POL: {detailRoute.loading}</p>
+          <p className="text-sm">POD: {detailRoute.discharge}</p>
+          {detailRoute.finalPlace && (
+            <p className="text-sm">FPOD: {detailRoute.finalPlace}</p>
+          )}
         </div>
       </div>
       <div className="card p-6 mt-5">

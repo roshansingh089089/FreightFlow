@@ -99,6 +99,43 @@ afterEach(() => {
 });
 
 describe('single-page enquiry intake', () => {
+  it('marks missing required fields invalid and clears the state after correction', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/enquiries/new']}>
+          <Routes>
+            <Route path="/enquiries/new" element={<EnquiryForm />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Create Enquiry' }));
+    expect(await screen.findByText('Select a customer')).toBeTruthy();
+    expect(
+      screen.getByLabelText(/^Customer \*/).getAttribute('aria-invalid'),
+    ).toBe('true');
+    expect(screen.getByLabelText(/^Mode \*/).getAttribute('aria-invalid')).toBe(
+      'true',
+    );
+    expect(
+      screen.getByLabelText(/^Origin \*/).getAttribute('aria-invalid'),
+    ).toBe('true');
+    expect(
+      screen.getByLabelText(/^Commodity \*/).getAttribute('aria-invalid'),
+    ).toBe('true');
+    fireEvent.change(screen.getByLabelText(/^Origin \*/), {
+      target: { value: 'Bangkok' },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText(/^Origin \*/).getAttribute('aria-invalid'),
+      ).toBe('false'),
+    );
+  });
+
   it('keeps C-term destination charges reference-only in Sales Tracker', () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -324,10 +361,10 @@ describe('single-page enquiry intake', () => {
     fireEvent.change(screen.getByLabelText('Mode *'), {
       target: { value: 'OCEAN' },
     });
-    fireEvent.change(screen.getByLabelText('Port of loading (POL)'), {
+    fireEvent.change(screen.getByLabelText('Port of loading (POL) *'), {
       target: { value: 'Laem' },
     });
-    fireEvent.focus(screen.getByLabelText('Port of loading (POL)'));
+    fireEvent.focus(screen.getByLabelText('Port of loading (POL) *'));
     fireEvent.click(
       await screen.findByRole('option', { name: /Laem Chabang · TH · THLCH/ }),
     );
@@ -352,6 +389,59 @@ describe('single-page enquiry intake', () => {
     expect(
       (screen.getByLabelText('Truck load') as HTMLSelectElement).value,
     ).toBe('');
+  });
+
+  it('points to an unselected route location and accepts its canonical suggestion', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/enquiries/new']}>
+          <Routes>
+            <Route path="/enquiries/new" element={<EnquiryForm />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('Customer *'), {
+      target: { value: customerId },
+    });
+    fireEvent.change(screen.getByLabelText('Mode *'), {
+      target: { value: 'OCEAN' },
+    });
+    fireEvent.change(screen.getByLabelText('Port of loading (POL) *'), {
+      target: { value: 'Laem' },
+    });
+    fireEvent.change(screen.getByLabelText('Origin *'), {
+      target: { value: 'Laem Chabang' },
+    });
+    fireEvent.change(screen.getByLabelText('Destination *'), {
+      target: { value: 'Nhava Sheva' },
+    });
+    fireEvent.change(screen.getByLabelText('Commodity *'), {
+      target: { value: 'General cargo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Enquiry' }));
+    expect(
+      await screen.findByText(
+        'Choose a loading location from the suggestions.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByLabelText('Port of loading (POL) *')
+        .getAttribute('aria-invalid'),
+    ).toBe('true');
+    fireEvent.focus(screen.getByLabelText('Port of loading (POL) *'));
+    fireEvent.click(
+      await screen.findByRole('option', { name: /Laem Chabang · TH · THLCH/ }),
+    );
+    expect(
+      screen
+        .getByLabelText('Port of loading (POL) *')
+        .getAttribute('aria-invalid'),
+    ).toBe('false');
   });
 
   it('updates the summary and persists a draft through the enquiry API', async () => {
@@ -448,11 +538,11 @@ describe('single-page enquiry intake', () => {
       'OCEAN',
     );
     expect(
-      (screen.getByLabelText('Port of loading (POL)') as HTMLInputElement)
+      (screen.getByLabelText('Port of loading (POL) *') as HTMLInputElement)
         .value,
     ).toBe('Laem Chabang');
     expect(
-      (screen.getByLabelText('Port of discharge (POD)') as HTMLInputElement)
+      (screen.getByLabelText('Port of discharge (POD) *') as HTMLInputElement)
         .value,
     ).toBe('Nhava Sheva');
     expect(
@@ -606,7 +696,7 @@ describe('single-page enquiry intake', () => {
         /Select a canonical loading and discharge location/,
       ),
     ).toBeTruthy();
-    fireEvent.focus(screen.getByLabelText('Port of loading (POL)'));
+    fireEvent.focus(screen.getByLabelText('Port of loading (POL) *'));
     fireEvent.click(
       await screen.findByRole('option', { name: /Laem Chabang · TH · THLCH/ }),
     );

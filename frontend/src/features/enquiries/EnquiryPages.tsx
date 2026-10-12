@@ -314,6 +314,7 @@ function LocationField({
   label,
   mode,
   relatedName,
+  onResolved,
 }: {
   form: any;
   name: string;
@@ -321,6 +322,7 @@ function LocationField({
   label: string;
   mode: string;
   relatedName?: 'origin' | 'destination';
+  onResolved?: () => void;
 }) {
   return (
     <>
@@ -328,16 +330,18 @@ function LocationField({
       <input type="hidden" {...form.register(codeName)} />
       <ReferenceLocationPicker
         id={`location-${name}`}
-        label={label}
+        label={`${label}${codeName === 'fpodCode' ? '' : ' *'}`}
         mode={mode}
         value={String(form.watch(name) || '')}
         code={String(form.watch(codeName) || '')}
+        error={form.formState.errors[codeName]?.message as string | undefined}
         onTextChange={(value) => {
           form.setValue(name, value, {
             shouldDirty: true,
             shouldValidate: true,
           });
           form.setValue(codeName, '', { shouldDirty: true });
+          form.clearErrors(codeName);
         }}
         onSelect={(location) => {
           form.setValue(name, location.name, {
@@ -345,6 +349,8 @@ function LocationField({
             shouldValidate: true,
           });
           form.setValue(codeName, location.code, { shouldDirty: true });
+          form.clearErrors(codeName);
+          onResolved?.();
           if (relatedName && !form.getValues(relatedName))
             form.setValue(relatedName, location.name, {
               shouldDirty: true,
@@ -565,8 +571,27 @@ export function EnquiryForm() {
           return;
         }
         if (['OCEAN', 'AIR'].includes(v.mode) && (!v.polCode || !v.podCode)) {
+          if (!v.polCode)
+            form.setError('polCode', {
+              message: 'Choose a loading location from the suggestions.',
+            });
+          if (!v.podCode)
+            form.setError('podCode', {
+              message: 'Choose a discharge location from the suggestions.',
+            });
           setErr(
             'Select a canonical loading and discharge location from the suggestions.',
+          );
+          const missingName = !v.polCode
+            ? v.mode === 'AIR'
+              ? 'airportOfOrigin'
+              : 'portOfLoading'
+            : v.mode === 'AIR'
+              ? 'airportOfDestination'
+              : 'portOfDischarge';
+          window.setTimeout(
+            () => document.getElementById(`location-${missingName}`)?.focus(),
+            0,
           );
           return;
         }
@@ -1246,6 +1271,7 @@ export function EnquiryForm() {
                       label="Port of loading (POL)"
                       mode="OCEAN"
                       relatedName="origin"
+                      onResolved={() => setErr('')}
                     />
                     <LocationField
                       form={form}
@@ -1254,6 +1280,7 @@ export function EnquiryForm() {
                       label="Port of discharge (POD)"
                       mode="OCEAN"
                       relatedName="destination"
+                      onResolved={() => setErr('')}
                     />
                     <LocationField
                       form={form}
@@ -1272,6 +1299,7 @@ export function EnquiryForm() {
                       label="Airport of Origin"
                       mode="AIR"
                       relatedName="origin"
+                      onResolved={() => setErr('')}
                     />
                     <LocationField
                       form={form}
@@ -1280,6 +1308,7 @@ export function EnquiryForm() {
                       label="Airport of Destination"
                       mode="AIR"
                       relatedName="destination"
+                      onResolved={() => setErr('')}
                     />
                   </>
                 ) : null}

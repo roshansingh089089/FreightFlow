@@ -14,6 +14,7 @@ export function ReferenceLocationPicker({
   mode,
   value,
   code,
+  error,
   onTextChange,
   onSelect,
 }: {
@@ -22,6 +23,7 @@ export function ReferenceLocationPicker({
   mode: string;
   value: string;
   code: string;
+  error?: string;
   onTextChange: (value: string) => void;
   onSelect: (location: LocationOption) => void;
 }) {
@@ -65,6 +67,8 @@ export function ReferenceLocationPicker({
         id={id}
         className="field"
         autoComplete="off"
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
         aria-autocomplete="list"
         aria-expanded={searchReady && !!choices.data?.length}
         value={value}
@@ -87,6 +91,11 @@ export function ReferenceLocationPicker({
           }
         }}
       />
+      {error && (
+        <small id={`${id}-error`} className="enquiry-field-error" role="alert">
+          {error}
+        </small>
+      )}
       {code ? (
         <small className="freight-location-hint">UN/LOCODE {code}</small>
       ) : value.trim().length >= 2 ? (

@@ -12,6 +12,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +44,9 @@ public class SecurityConfig {
   @Value("${app.frontend-origin}")
   String origin;
 
+  @Value("${app.frontend-additional-origin:}")
+  String additionalOrigin;
+
   @PostConstruct
   void validateSecret() {
     if (secret == null || secret.length() < 32)
@@ -57,7 +61,9 @@ public class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration c = new CorsConfiguration();
-    c.setAllowedOrigins(List.of(origin));
+    List<String> allowedOrigins = new ArrayList<>(List.of(origin));
+    if (!additionalOrigin.isBlank()) allowedOrigins.add(additionalOrigin);
+    c.setAllowedOrigins(allowedOrigins);
     c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     c.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN"));
     c.setAllowCredentials(true);

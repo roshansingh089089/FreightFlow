@@ -42,6 +42,7 @@ export type QuotationDocumentModel = {
   mode: string | null;
   origin: string | null;
   destination: string | null;
+  finalDestination?: string | null;
   cargo: string | null;
   incoterm: string | null;
   transitTime: string | null;
@@ -152,8 +153,11 @@ export function QuotationDocument({
       >
         {[
           ['Mode', model.mode],
-          ['From', model.origin],
-          ['To', model.destination],
+          ['POL / origin', model.origin],
+          ['POD / discharge', model.destination],
+          ...(model.finalDestination
+            ? ([['Final place of delivery', model.finalDestination]] as const)
+            : []),
           ['Cargo', model.cargo],
           ['Incoterm', model.incoterm],
         ].map(([label, value]) => (

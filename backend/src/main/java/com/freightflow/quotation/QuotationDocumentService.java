@@ -14,6 +14,7 @@ import com.freightflow.customer.repository.ContactRepo;
 import com.freightflow.quotation.entity.Quotation;
 import com.freightflow.quotation.entity.QuotationLine;
 import com.freightflow.quotation.repository.LineRepo;
+import com.freightflow.reference.LocationSearchService;
 import com.freightflow.tenant.repository.TenantRepo;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -60,6 +61,7 @@ public class QuotationDocumentService {
       String mode,
       String origin,
       String destination,
+      String finalDestination,
       String cargo,
       String incoterm,
       String transitTime,
@@ -77,6 +79,7 @@ public class QuotationDocumentService {
   private final TenantRepo tenants;
   private final UserRepo users;
   private final ObjectMapper mapper;
+  private final LocationSearchService locations;
 
   public QuotationDocumentService(
       QuotationLookupService lookup,
@@ -85,7 +88,8 @@ public class QuotationDocumentService {
       AddressRepo addresses,
       TenantRepo tenants,
       UserRepo users,
-      ObjectMapper mapper) {
+      ObjectMapper mapper,
+      LocationSearchService locations) {
     this.lookup = lookup;
     this.lines = lines;
     this.contacts = contacts;
@@ -93,6 +97,7 @@ public class QuotationDocumentService {
     this.tenants = tenants;
     this.users = users;
     this.mapper = mapper;
+    this.locations = locations;
   }
 
   public Document document(Quotation quotation) {
@@ -100,6 +105,10 @@ public class QuotationDocumentService {
       try {
         ObjectNode snapshot = (ObjectNode) mapper.readTree(quotation.getDocumentSnapshot());
         snapshot.put("status", quotation.getStatus());
+        if (!snapshot.hasNonNull("finalDestination") && quotation.getShipmentSnapshot() != null)
+          snapshot.put(
+              "finalDestination",
+              finalDestination(mapper.readTree(quotation.getShipmentSnapshot())));
         return mapper.treeToValue(snapshot, Document.class);
       } catch (JsonProcessingException exception) {
         throw new ApiException(
@@ -212,6 +221,7 @@ public class QuotationDocumentService {
         text(shipment, "mode"),
         text(shipment, "origin"),
         text(shipment, "destination"),
+        finalDestination(shipment),
         cargo,
         text(shipment, "incoterm"),
         quotation.getTransitTimeText(),
@@ -221,6 +231,23 @@ public class QuotationDocumentService {
         new ArrayList<>(scopes.keySet()),
         excluded,
         quotation.getTermsAndConditions());
+  }
+
+  private String finalDestination(JsonNode shipment) {
+    String fpodCode = text(shipment, "fpodCode");
+    String podCode = text(shipment, "podCode");
+    String finalDestination = null;
+    if (fpodCode != null && !fpodCode.equalsIgnoreCase(Objects.toString(podCode, ""))) {
+      finalDestination = text(shipment, "fpodName");
+      if (finalDestination == null) {
+        try {
+          finalDestination = locations.require(fpodCode, "ALL").getName();
+        } catch (ApiException exception) {
+          finalDestination = fpodCode;
+        }
+      }
+    }
+    return finalDestination;
   }
 
   private static String text(JsonNode node, String key) {

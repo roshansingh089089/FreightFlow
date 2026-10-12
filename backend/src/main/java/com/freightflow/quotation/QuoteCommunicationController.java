@@ -155,7 +155,8 @@ class QuoteCommunicationController {
       PdfPTable summary = new PdfPTable(new float[] {1, 1.8f, 1.8f, 1.5f, 1.25f});
       summary.setWidthPercentage(100);
       summary.setSpacingAfter(14);
-      for (String label : java.util.List.of("MODE", "FROM", "TO", "CARGO", "INCOTERM"))
+      for (String label :
+          java.util.List.of("MODE", "POL / ORIGIN", "POD / DISCHARGE", "CARGO", "INCOTERM"))
         summary.addCell(summaryCell(label, new Font(Font.HELVETICA, 7, Font.BOLD, Color.WHITE)));
       for (String field :
           java.util.List.of(
@@ -166,6 +167,8 @@ class QuoteCommunicationController {
               value(model.incoterm())))
         summary.addCell(summaryCell(field, new Font(Font.HELVETICA, 9, Font.BOLD, Color.WHITE)));
       d.add(summary);
+      if (model.finalDestination() != null)
+        d.add(new Paragraph("Final place of delivery: " + model.finalDestination(), body));
       if (model.transitTime() != null)
         d.add(new Paragraph("Transit time: " + model.transitTime(), body));
       d.add(new Paragraph(" "));

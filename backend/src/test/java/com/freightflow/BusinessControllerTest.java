@@ -34,6 +34,56 @@ class BusinessServiceTest {
   }
 
   @Test
+  void changingFinalPlaceRejectsOldPricedHaulageBeforeSaving() {
+    QuoteRepo quotes = mock(QuoteRepo.class);
+    QuotationShipmentMapper shipmentMapper = mock(QuotationShipmentMapper.class);
+    BusinessService business =
+        new BusinessService(
+            mock(org.springframework.jdbc.core.JdbcTemplate.class),
+            mock(CustomerRepo.class),
+            mock(ContactRepo.class),
+            mock(AddressRepo.class),
+            mock(EnquiryRepo.class),
+            quotes,
+            mock(LineRepo.class),
+            mock(CustomerProfileService.class),
+            mock(EmailMessageRepo.class),
+            mock(MailConnectionRepo.class),
+            mock(LocationSearchService.class),
+            shipmentMapper,
+            mock(CurrencyConversionService.class));
+    AppUser user = new AppUser();
+    user.setTenantId(UUID.randomUUID());
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(user, null));
+    UUID quoteId = UUID.randomUUID();
+    var quotation = new com.freightflow.quotation.entity.Quotation();
+    quotation.setShipmentSnapshot("{\"fpodCode\":\"USCA2\"}");
+    when(quotes.findByIdAndTenantId(quoteId, user.getTenantId()))
+        .thenReturn(Optional.of(quotation));
+    when(shipmentMapper.haulageRouteChanged(anyString(), same(quotation))).thenReturn(true);
+    var input =
+        new com.freightflow.quotation.dto.request.QuoteInput(
+            "USD",
+            null,
+            java.time.LocalDate.now().plusDays(7),
+            "Terms",
+            null,
+            java.util.List.of(
+                new com.freightflow.quotation.dto.request.LineInput(
+                    "Haulage to final place",
+                    java.math.BigDecimal.ONE,
+                    new java.math.BigDecimal("100"),
+                    "USD")),
+            new com.freightflow.quotation.dto.request.ShipmentOverrideInput(
+                "VNOCL", "USNYC", "USCA3", "FOB"));
+    ApiException error =
+        assertThrows(ApiException.class, () -> business.updateQuote(quoteId, input));
+    assertEquals("HAULAGE_REPRICE_REQUIRED", error.code);
+    verify(quotes, never()).save(any());
+  }
+
+  @Test
   void customerLookupUsesAuthenticatedTenant() {
     CustomerRepo customers = mock(CustomerRepo.class);
     BusinessService b =

@@ -526,7 +526,7 @@ public class BusinessService {
     q.setCreatedBy(user());
     q.setEnquiryId(e.getId());
     q.setCustomerId(e.getCustomerId());
-    shipmentMapper.snapshot(e, q);
+    shipmentMapper.snapshot(e, q, locations);
     q.setQuotationNumber(
         "QT-"
             + Year.now().getValue()
@@ -570,9 +570,21 @@ public class BusinessService {
     Quotation q = quote(id);
     if (!q.getStatus().equals("DRAFT"))
       throw new ApiException(409, "QUOTE_LOCKED", "Only draft quotations can be edited");
-    if (q.getShipmentSnapshot() == null) shipmentMapper.snapshot(enquiry(q.getEnquiryId()), q);
+    if (q.getShipmentSnapshot() == null)
+      shipmentMapper.snapshot(enquiry(q.getEnquiryId()), q, locations);
+    String previousShipment = q.getShipmentSnapshot();
     apply(q, r);
     shipmentMapper.applyOverride(q, r.shipmentOverride(), locations);
+    if (shipmentMapper.haulageRouteChanged(previousShipment, q)
+        && r.lines().stream()
+            .anyMatch(
+                line ->
+                    IncotermScopeResolver.HAULAGE.equals(line.description())
+                        && line.unitPrice().signum() > 0))
+      throw new ApiException(
+          409,
+          "HAULAGE_REPRICE_REQUIRED",
+          "Remove the old haulage price, save the new route, then price haulage again");
     shipmentMapper.validate(q);
     quotes.save(q);
     lines.deleteByTenantIdAndQuotationId(tenant(), id);

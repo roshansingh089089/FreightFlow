@@ -27,6 +27,7 @@ app:
   jwt-secret: ${JWT_SECRET}
   cookie-secure: ${COOKIE_SECURE:false}
   frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+  frontend-additional-origin: ${FRONTEND_ADDITIONAL_ORIGIN:https://breakfast-publishers-schools-backing.trycloudflare.com}
 gemini:
   api-key: ${GEMINI_API_KEY:}
   model: ${GEMINI_MODEL:gemini-3.5-flash-lite}

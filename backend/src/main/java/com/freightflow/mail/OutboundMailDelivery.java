@@ -9,11 +9,9 @@ import com.freightflow.mail.repository.MailConnectionRepo;
 import com.freightflow.mail.repository.OutboundAttachmentRepo;
 import com.freightflow.mail.repository.OutboundMessageRepo;
 import com.freightflow.mail.repository.OutboundRecipientRepo;
-import jakarta.mail.Folder;
-import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
-import jakarta.mail.Store;
 import jakarta.mail.internet.MimeMessage;
+import java.io.ByteArrayOutputStream;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.UUID;
@@ -28,13 +26,13 @@ import org.springframework.stereotype.Component;
 
 @Component
 class OutboundSmtpTransport {
-  private static final Logger log = LoggerFactory.getLogger(OutboundSmtpTransport.class);
   private final MailConnectionRepo connections;
   private final MailCredentialCipher cipher;
   private final MailTransportSupport transport;
   private final OutboundRecipientRepo recipients;
   private final OutboundAttachmentRepo attachments;
   private final MailAttachmentService attachmentService;
+  private final JdbcTemplate jdbc;
 
   OutboundSmtpTransport(
       MailConnectionRepo connections,
@@ -42,13 +40,15 @@ class OutboundSmtpTransport {
       MailTransportSupport transport,
       OutboundRecipientRepo recipients,
       OutboundAttachmentRepo attachments,
-      MailAttachmentService attachmentService) {
+      MailAttachmentService attachmentService,
+      JdbcTemplate jdbc) {
     this.connections = connections;
     this.cipher = cipher;
     this.transport = transport;
     this.recipients = recipients;
     this.attachments = attachments;
     this.attachmentService = attachmentService;
+    this.jdbc = jdbc;
   }
 
   void send(OutboundMessage message) throws MessagingException {
@@ -99,40 +99,30 @@ class OutboundSmtpTransport {
         attachments.findByTenantIdAndMessageId(message.getTenantId(), message.getId()))
       helper.addAttachment(
           a.getFilename(), new ByteArrayResource(attachmentService.bytes(a)), a.getMediaType());
-    sender.send(mime);
-    appendToSent(c, mime);
-  }
-
-  private void appendToSent(MailConnection connection, MimeMessage mime) {
-    Store store = null;
+    mime.setSentDate(java.util.Date.from(java.time.Instant.now()));
+    mime.saveChanges();
+    byte[] sentMime;
     try {
-      var session =
-          transport.session(
-              "imap",
-              connection.getImapHost(),
-              connection.getImapPort(),
-              connection.getImapSecurityMode());
-      store = session.getStore("imap");
-      store.connect(
-          connection.getImapHost(),
-          connection.getImapPort(),
-          connection.getImapUsername(),
-          cipher.decrypt(connection.getImapPasswordEncrypted()));
-      Folder sent = store.getFolder("Sent");
-      if (!sent.exists()) sent = store.getFolder("Sent Items");
-      if (sent.exists()) sent.appendMessages(new Message[] {mime});
-    } catch (Exception e) {
-      // SMTP has already accepted the message. APPEND failure must not trigger a second send.
-      log.warn(
-          "Sent-folder append unavailable for mailbox {} ({})",
-          connection.getId(),
-          e.getClass().getSimpleName());
-    } finally {
-      try {
-        if (store != null && store.isConnected()) store.close();
-      } catch (Exception ignored) {
-      }
+      var output = new ByteArrayOutputStream();
+      mime.writeTo(output);
+      sentMime = output.toByteArray();
+    } catch (java.io.IOException exception) {
+      throw new MessagingException("Could not prepare sent message", exception);
     }
+    int prepared =
+        jdbc.update(
+            "insert into mail_sent_copies(message_id,tenant_id,user_id,connection_id,rfc_message_id,mime_bytes) "
+                + "values (?,?,?,?,?,?) on conflict (message_id) do nothing",
+            message.getId(),
+            message.getTenantId(),
+            message.getCreatedBy(),
+            c.getId(),
+            message.getMessageId(),
+            sentMime);
+    if (prepared != 1)
+      throw new ApiException(
+          409, "MAIL_SEND_ALREADY_PREPARED", "This email has an existing submission attempt");
+    sender.send(mime);
   }
 
   private static String[] addresses(List<OutboundRecipient> rows, String type) {

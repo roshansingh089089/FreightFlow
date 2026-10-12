@@ -35,6 +35,7 @@ const model: QuotationDocumentModel = {
   mode: 'OCEAN',
   origin: 'Mumbai',
   destination: 'Bangkok',
+  finalDestination: 'Chiang Mai',
   cargo: 'Machinery · 1 × 40HC',
   incoterm: 'CIF',
   transitTime: '14 days',
@@ -87,6 +88,8 @@ describe('quotation preview', () => {
     fireEvent.click(opener);
     expect(document.body.style.overflow).toBe('hidden');
     expect(await screen.findByText('Acme Exporters')).toBeTruthy();
+    expect(screen.getByText('Final place of delivery')).toBeTruthy();
+    expect(screen.getByText('Chiang Mai')).toBeTruthy();
     expect(screen.getByText('No charges saved yet.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'View in Mail' })).toBeTruthy();
     expect(document.querySelector('.quote-modal-scroll')).toBeTruthy();

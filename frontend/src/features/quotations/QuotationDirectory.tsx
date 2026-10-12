@@ -11,6 +11,7 @@ import {
 import { date, fmt, useData } from '../../shared/lib/workspace';
 import { QuotationPreview } from './QuotationDocument';
 import { quotationActions } from './quotationActions';
+import { QuotationRouteLabel } from './quotationRoute';
 
 type QuotationRow = {
   id: string;
@@ -140,9 +141,11 @@ export default function QuotationDirectory() {
                           {row.customerName}
                         </td>
                         <td>
-                          {details.origin && details.destination
-                            ? `${details.origin} → ${details.destination}`
-                            : '—'}
+                          {details.origin && details.destination ? (
+                            <QuotationRouteLabel shipment={details} />
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td>{cargo || '—'}</td>
                         <td className="number quote-directory-total">

@@ -94,6 +94,45 @@ class QuotationShipmentMapperTest {
   }
 
   @Test
+  void storesVerifiedFinalPlaceNameAndRequiresDistinctDestinationForHaulage() throws Exception {
+    var json = new ObjectMapper().findAndRegisterModules();
+    var mapper = new QuotationShipmentMapper(json);
+    Enquiry enquiry = new Enquiry();
+    enquiry.setMode("OCEAN");
+    enquiry.setPolCode("VNOCL");
+    enquiry.setPodCode("USNYC");
+    enquiry.setFpodCode("USCA2");
+    enquiry.setIncoterm("FOB");
+    Quotation quotation = new Quotation();
+    LocationSearchService locations = Mockito.mock(LocationSearchService.class);
+    Location pol = new Location();
+    pol.setCode("VNOCL");
+    pol.setName("Cat Lai Oil Port");
+    Location pod = new Location();
+    pod.setCode("USNYC");
+    pod.setName("New York");
+    Location fpod = new Location();
+    fpod.setCode("USCA2");
+    fpod.setName("Final Delivery City");
+    when(locations.require("VNOCL", "OCEAN")).thenReturn(pol);
+    when(locations.require("USNYC", "OCEAN")).thenReturn(pod);
+    when(locations.require("USCA2", "ALL")).thenReturn(fpod);
+    when(locations.require("USNYC", "ALL")).thenReturn(pod);
+    mapper.snapshot(enquiry, quotation, locations);
+    assertEquals(
+        "Final Delivery City",
+        json.readTree(quotation.getShipmentSnapshot()).path("fpodName").asText());
+    assertTrue(mapper.chargeApplicable(quotation, IncotermScopeResolver.HAULAGE));
+    String previousSnapshot = quotation.getShipmentSnapshot();
+    mapper.applyOverride(
+        quotation, new ShipmentOverrideInput("VNOCL", "USNYC", "USNYC", "FOB"), locations);
+    assertTrue(mapper.haulageRouteChanged(previousSnapshot, quotation));
+    assertTrue(!mapper.chargeApplicable(quotation, IncotermScopeResolver.HAULAGE));
+    assertEquals(
+        "New York", json.readTree(quotation.getShipmentSnapshot()).path("fpodName").asText());
+  }
+
+  @Test
   void changesIncotermWithoutRouteOverrideAndRejectsUnsupportedTerms() throws Exception {
     var mapper = new QuotationShipmentMapper(new ObjectMapper().findAndRegisterModules());
     Enquiry enquiry = new Enquiry();

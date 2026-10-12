@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -21,7 +22,7 @@ vi.mock('../../shared/lib/workspace', () => ({
                 status: 'SENT',
                 createdAt: '2026-10-11T00:00:00Z',
                 shipmentSnapshot:
-                  '{"origin":"Mumbai","destination":"Bangkok","commodity":"Machinery"}',
+                  '{"origin":"Mumbai","destination":"Bangkok","podCode":"THBKK","fpodCode":"THCNX","commodity":"Machinery"}',
               },
             ],
             totalPages: 1,
@@ -31,16 +32,23 @@ vi.mock('../../shared/lib/workspace', () => ({
   ),
   date: () => '11 Oct 2026',
   fmt: (value: number) => String(value),
+  api: vi.fn(async () => [
+    { code: 'THCNX', name: 'Chiang Mai', countryCode: 'TH' },
+  ]),
 }));
 
 describe('quotation directory', () => {
-  it('shows saved route data and sends supported status filters to the API', () => {
+  it('resolves a legacy final place code and sends supported status filters to the API', async () => {
     render(
-      <MemoryRouter>
-        <QuotationDirectory />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <QuotationDirectory />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
-    expect(screen.getByText('Mumbai → Bangkok')).toBeTruthy();
+    expect(
+      await screen.findByText('Mumbai → Bangkok → Chiang Mai'),
+    ).toBeTruthy();
     expect(screen.getByText('Machinery')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Drafts' }));
     expect(useData).toHaveBeenCalledWith(

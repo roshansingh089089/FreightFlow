@@ -38,6 +38,7 @@ public class QuotationShipmentMapper {
     details.put("polCode", enquiry.getPolCode());
     details.put("podCode", enquiry.getPodCode());
     details.put("fpodCode", enquiry.getFpodCode());
+    details.put("fpodName", (String) null);
     details.put("portOfLoading", enquiry.getPortOfLoading());
     details.put("portOfDischarge", enquiry.getPortOfDischarge());
     details.put("airportOfOrigin", enquiry.getAirportOfOrigin());
@@ -61,7 +62,8 @@ public class QuotationShipmentMapper {
             ? IncotermScopeResolver.defaults(
                 enquiry.getIncoterm(),
                 defaultShipmentMode(enquiry.getMode(), enquiry.getCargoType()),
-                enquiry.getFpodCode() != null)
+                enquiry.getFpodCode() != null
+                    && !enquiry.getFpodCode().equalsIgnoreCase(enquiry.getPodCode()))
             : List.of();
     List<String> scope =
         enquiry.getServiceScope() == null ? defaultScope : enquiry.getServiceScope();
@@ -83,6 +85,18 @@ public class QuotationShipmentMapper {
     quotation.setSourceMessageId(enquiry.getSourceMessageId());
     quotation.setSourceThreadId(enquiry.getSourceThreadId());
     quotation.setSourceConnectionId(enquiry.getSourceConnectionId());
+  }
+
+  public void snapshot(Enquiry enquiry, Quotation quotation, LocationSearchService locations) {
+    snapshot(enquiry, quotation);
+    if (enquiry.getFpodCode() == null) return;
+    try {
+      ObjectNode details = (ObjectNode) mapper.readTree(quotation.getShipmentSnapshot());
+      details.put("fpodName", locations.require(enquiry.getFpodCode(), "ALL").getName());
+      quotation.setShipmentSnapshot(mapper.writeValueAsString(details));
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Could not snapshot final place", exception);
+    }
   }
 
   public void applyOverride(
@@ -130,8 +144,11 @@ public class QuotationShipmentMapper {
         }
         if (override.fpodCode() == null || override.fpodCode().isBlank()) {
           details.putNull("fpodCode");
+          details.putNull("fpodName");
         } else {
-          details.put("fpodCode", locations.require(override.fpodCode(), "ALL").getCode());
+          var fpod = locations.require(override.fpodCode(), "ALL");
+          details.put("fpodCode", fpod.getCode());
+          details.put("fpodName", fpod.getName());
         }
       }
       put(details, "customerReference", override.customerReference());
@@ -159,7 +176,7 @@ public class QuotationShipmentMapper {
             Math.max(details.path("cbm").asDouble(), details.path("weightKg").asDouble() / 1000));
       if (override.scope() != null) {
         IncotermScopeResolver.validateScope(
-            override.scope(), shipmentMode, !details.path("fpodCode").asText().isBlank());
+            override.scope(), shipmentMode, hasDistinctFinalPlace(details));
         details.set("scope", mapper.valueToTree(override.scope()));
         details.put(
             "scopeCustomized",
@@ -170,7 +187,7 @@ public class QuotationShipmentMapper {
                             IncotermScopeResolver.defaults(
                                 details.path("incoterm").asText(),
                                 shipmentMode,
-                                !details.path("fpodCode").asText().isBlank()))));
+                                hasDistinctFinalPlace(details)))));
       } else if ((!details.has("scope")
               || details.path("scope").isNull()
               || !previousIncoterm.equals(details.path("incoterm").asText()))
@@ -182,7 +199,7 @@ public class QuotationShipmentMapper {
                   IncotermScopeResolver.defaults(
                       details.path("incoterm").asText(),
                       shipmentMode,
-                      !details.path("fpodCode").asText().isBlank())));
+                      hasDistinctFinalPlace(details))));
       }
       quotation.setShipmentSnapshot(mapper.writeValueAsString(details));
     } catch (JsonProcessingException exception) {
@@ -237,8 +254,7 @@ public class QuotationShipmentMapper {
       if (details.path("scope").isArray()) {
         List<String> scope = new java.util.ArrayList<>();
         details.path("scope").forEach(value -> scope.add(value.asText()));
-        IncotermScopeResolver.validateScope(
-            scope, mode, !details.path("fpodCode").asText().isBlank());
+        IncotermScopeResolver.validateScope(scope, mode, hasDistinctFinalPlace(details));
       }
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Could not validate quotation shipment", exception);
@@ -260,7 +276,7 @@ public class QuotationShipmentMapper {
       var details = mapper.readTree(quotation.getShipmentSnapshot());
       String mode = details.path("shipmentMode").asText();
       if (IncotermScopeResolver.HAULAGE.equals(description))
-        return !IncotermScopeResolver.isRoad(mode) && !details.path("fpodCode").asText().isBlank();
+        return !IncotermScopeResolver.isRoad(mode) && hasDistinctFinalPlace(details);
       if (IncotermScopeResolver.isRoad(mode))
         return !Set.of(
                 IncotermScopeResolver.ORIGIN,
@@ -271,6 +287,26 @@ public class QuotationShipmentMapper {
       return true;
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Could not validate quotation charge", exception);
+    }
+  }
+
+  private static boolean hasDistinctFinalPlace(com.fasterxml.jackson.databind.JsonNode details) {
+    String fpod = details.path("fpodCode").asText();
+    return !fpod.isBlank() && !fpod.equalsIgnoreCase(details.path("podCode").asText());
+  }
+
+  public boolean haulageRouteChanged(String previousSnapshot, Quotation quotation) {
+    if (previousSnapshot == null) return false;
+    try {
+      var previous = mapper.readTree(previousSnapshot);
+      var current = mapper.readTree(quotation.getShipmentSnapshot());
+      return !previous.path("podCode").asText().equalsIgnoreCase(current.path("podCode").asText())
+          || !previous
+              .path("fpodCode")
+              .asText()
+              .equalsIgnoreCase(current.path("fpodCode").asText());
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Could not compare quotation routes", exception);
     }
   }
 

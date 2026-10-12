@@ -47,6 +47,109 @@ afterEach(() => {
 });
 
 describe('quotation builder', () => {
+  it('shows a selected final place in the live route and removes it when cleared', async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => {
+      if (path.startsWith('/reference/locations'))
+        return [
+          { code: 'USCA2', name: 'Final Delivery City', countryCode: 'US' },
+        ];
+      return {
+        enquiry: {
+          customerName: 'Acme',
+          origin: 'Laem Chabang',
+          destination: 'New York',
+          polCode: 'THLCH',
+          podCode: 'USNYC',
+          portOfLoading: 'Laem Chabang',
+          portOfDischarge: 'New York',
+          mode: 'OCEAN',
+          commodity: 'General cargo',
+        },
+      };
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/enquiries/enquiry-1/quotations/new']}>
+          <Routes>
+            <Route
+              path="/enquiries/:enquiryId/quotations/new"
+              element={<QuoteForm />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Laem Chabang → New York · OCEAN · General cargo');
+    const fpod = screen.getByLabelText('Final place (FPOD)');
+    fireEvent.change(fpod, { target: { value: 'Final' } });
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'Final Delivery City · US · USCA2',
+      }),
+    );
+    expect(
+      screen.getAllByText('Laem Chabang → New York → Final Delivery City'),
+    ).toHaveLength(1);
+    fireEvent.change(fpod, { target: { value: '' } });
+    expect(
+      screen.queryByText('Laem Chabang → New York → Final Delivery City'),
+    ).toBeNull();
+  });
+
+  it('removes a priced haulage line after a confirmed final place change', async () => {
+    vi.mocked(api).mockResolvedValue({
+      enquiry: {
+        customerName: 'Acme',
+        origin: 'Laem Chabang',
+        destination: 'Nhava Sheva',
+        polCode: 'THLCH',
+        podCode: 'INNSA',
+        fpodCode: 'USCA2',
+        fpodName: 'Final Delivery City',
+        portOfLoading: 'Laem Chabang',
+        portOfDischarge: 'Nhava Sheva',
+        mode: 'OCEAN',
+        incoterm: 'FOB',
+        serviceScope: ['Haulage to final place'],
+        commodity: 'General cargo',
+      },
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/enquiries/enquiry-1/quotations/new']}>
+          <Routes>
+            <Route
+              path="/enquiries/:enquiryId/quotations/new"
+              element={<QuoteForm />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await screen.findByText(
+      'Laem Chabang → Nhava Sheva → Final Delivery City · OCEAN · General cargo',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    fireEvent.change(screen.getByLabelText('Charge 1 unit price'), {
+      target: { value: '100' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.change(screen.getByLabelText('Final place (FPOD)'), {
+      target: { value: '' },
+    });
+    expect(confirm).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(screen.queryByDisplayValue('Haulage to final place')).toBeNull();
+    confirm.mockRestore();
+  });
+
   it.each([
     ['pol', 'Port of loading (POL)', 'polCode', 'OCEAN'],
     ['pod', 'Port of discharge (POD)', 'podCode', 'OCEAN'],

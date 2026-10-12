@@ -281,12 +281,41 @@ class MailProtocolTest {
     when(attachments.findByTenantIdAndMessageId(connection.getTenantId(), message.getId()))
         .thenReturn(List.of(pdf));
     when(attachmentService.bytes(pdf)).thenReturn("%PDF-1.4\n".getBytes());
+    var jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+    when(jdbc.update(
+            startsWith("insert into mail_sent_copies"),
+            eq(message.getId()),
+            eq(message.getTenantId()),
+            eq(message.getCreatedBy()),
+            eq(connection.getId()),
+            eq(message.getMessageId()),
+            any(byte[].class)))
+        .thenReturn(1);
     OutboundSmtpTransport transport =
         new OutboundSmtpTransport(
-            connections, cipher, support, recipients, attachments, attachmentService);
+            connections, cipher, support, recipients, attachments, attachmentService, jdbc);
     transport.send(message);
+    var savedMime = org.mockito.ArgumentCaptor.forClass(byte[].class);
+    verify(jdbc)
+        .update(
+            startsWith("insert into mail_sent_copies"),
+            eq(message.getId()),
+            eq(message.getTenantId()),
+            eq(message.getCreatedBy()),
+            eq(connection.getId()),
+            eq(message.getMessageId()),
+            savedMime.capture());
+    MimeMessage archived =
+        new MimeMessage(
+            Session.getInstance(new Properties()),
+            new java.io.ByteArrayInputStream(savedMime.getValue()));
+    assertEquals(message.getMessageId(), archived.getHeader("Message-ID", null));
+    assertEquals("quotation.pdf", ((Multipart) archived.getContent()).getBodyPart(1).getFileName());
     assertTrue(server.waitForIncomingEmail(5000, 2));
     MimeMessage delivered = server.getReceivedMessages()[0];
+    assertEquals(
+        archived.getHeader("Content-Type", null), delivered.getHeader("Content-Type", null));
+    assertEquals(archived.getHeader("Date", null), delivered.getHeader("Date", null));
     assertEquals("<reply-1@example.test>", delivered.getHeader("Message-ID", null));
     assertEquals("<enquiry-1@example.test>", delivered.getHeader("In-Reply-To", null));
     assertEquals("<enquiry-1@example.test>", delivered.getHeader("References", null));
@@ -297,6 +326,32 @@ class MailProtocolTest {
         ((InternetAddress) delivered.getRecipients(Message.RecipientType.CC)[0]).getAddress());
     Multipart content = (Multipart) delivered.getContent();
     assertEquals("quotation.pdf", content.getBodyPart(1).getFileName());
+    Store imap = Session.getInstance(new Properties()).getStore("imap");
+    imap.connect("localhost", server.getImap().getPort(), "agent", "secret");
+    assertTrue(imap.getFolder("Sent").create(Folder.HOLDS_MESSAGES));
+    imap.close();
+    var sentCopy =
+        new SentCopySyncWorker.Copy(
+            message.getId(),
+            message.getTenantId(),
+            message.getCreatedBy(),
+            connection.getId(),
+            message.getMessageId(),
+            savedMime.getValue(),
+            0);
+    var synchronizer = new SentMailboxSync(connections, cipher, support);
+    assertTrue(synchronizer.sync(sentCopy).complete());
+    imap = Session.getInstance(new Properties()).getStore("imap");
+    imap.connect("localhost", server.getImap().getPort(), "agent", "secret");
+    Folder sent = imap.getFolder("Sent");
+    sent.open(Folder.READ_ONLY);
+    assertEquals(1, sent.getMessageCount());
+    MimeMessage sentMessage = (MimeMessage) sent.getMessage(1);
+    assertEquals(message.getMessageId(), sentMessage.getHeader("Message-ID", null));
+    assertEquals(
+        "quotation.pdf", ((Multipart) sentMessage.getContent()).getBodyPart(1).getFileName());
+    sent.close(false);
+    imap.close();
   }
 
   @Test
@@ -319,9 +374,19 @@ class MailProtocolTest {
         .thenReturn(List.of(recipient(message, "TO", "buyer@example.test")));
     when(attachments.findByTenantIdAndMessageId(connection.getTenantId(), message.getId()))
         .thenReturn(List.of());
+    var jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+    when(jdbc.update(
+            startsWith("insert into mail_sent_copies"),
+            eq(message.getId()),
+            eq(message.getTenantId()),
+            eq(message.getCreatedBy()),
+            eq(connection.getId()),
+            eq(message.getMessageId()),
+            any(byte[].class)))
+        .thenReturn(1);
     OutboundSmtpTransport transport =
         new OutboundSmtpTransport(
-            connections, cipher, support, recipients, attachments, attachmentService);
+            connections, cipher, support, recipients, attachments, attachmentService, jdbc);
     transport.send(message);
     assertTrue(server.waitForIncomingEmail(5000, 1));
     MimeMessage delivered = server.getReceivedMessages()[0];
@@ -329,6 +394,39 @@ class MailProtocolTest {
     assertNull(delivered.getHeader("In-Reply-To", null));
     assertNull(delivered.getHeader("References", null));
     assertEquals("Re: Freight enquiry", delivered.getSubject());
+  }
+
+  @Test
+  void existingPreparedMimePreventsAnotherSmtpSubmission() {
+    MailConnectionRepo connections = mock(MailConnectionRepo.class);
+    OutboundRecipientRepo recipients = mock(OutboundRecipientRepo.class);
+    OutboundMessage message = new OutboundMessage();
+    message.setTenantId(connection.getTenantId());
+    message.setCreatedBy(connection.getUserId());
+    message.setConnectionId(connection.getId());
+    message.setMessageId("<already-prepared@example.test>");
+    message.setSubject("Already prepared");
+    message.setBodyText("Do not send twice");
+    when(connections.findByIdAndTenantIdAndUserId(
+            connection.getId(), connection.getTenantId(), connection.getUserId()))
+        .thenReturn(Optional.of(connection));
+    when(recipients.findByTenantIdAndMessageId(connection.getTenantId(), message.getId()))
+        .thenReturn(List.of(recipient(message, "TO", "buyer@example.test")));
+    OutboundAttachmentRepo attachments = mock(OutboundAttachmentRepo.class);
+    when(attachments.findByTenantIdAndMessageId(connection.getTenantId(), message.getId()))
+        .thenReturn(List.of());
+    var transport =
+        new OutboundSmtpTransport(
+            connections,
+            cipher,
+            support,
+            recipients,
+            attachments,
+            mock(MailAttachmentService.class),
+            mock(org.springframework.jdbc.core.JdbcTemplate.class));
+    assertThrows(
+        com.freightflow.common.exception.ApiException.class, () -> transport.send(message));
+    assertEquals(0, server.getReceivedMessages().length);
   }
 
   private static OutboundRecipient recipient(OutboundMessage message, String type, String email) {

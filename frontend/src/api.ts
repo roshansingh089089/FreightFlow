@@ -1,17 +1,5 @@
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const apiBaseUrl = configuredBaseUrl
-  ? configuredBaseUrl.replace(/\/+$/, '')
-  : import.meta.env.DEV
-    ? 'http://localhost:8080'
-    : null;
-
 export function apiUrl(path: string): string {
-  if (!apiBaseUrl) {
-    throw new Error(
-      'VITE_API_BASE_URL is required for production API requests',
-    );
-  }
-  return `${apiBaseUrl}/api${path.startsWith('/') ? path : `/${path}`}`;
+  return `/api${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 export async function apiFetch(
