@@ -47,6 +47,7 @@ class AiController {
   @PreAuthorize("@permissions.can('mail.compose')")
   @PostMapping("/mail/draft")
   Object mailDraft(@Valid @RequestBody MailAssistRequest request) {
+    AiDiagnostics.validationSuccess();
     if ("SUMMARIZE".equals(request.action()))
       return assistance.mailDraft(request.action(), request.context(), request.currentDraft());
     return assistance.composeMail(
@@ -68,6 +69,7 @@ class AiController {
     if (request.text().length() > 10000)
       throw new ApiException(
           413, "AI_INPUT_TOO_LARGE", "Shipment text must be 10,000 characters or less.");
+    AiDiagnostics.validationSuccess();
     return assistance.tracked(
         "SHIPMENT_EXTRACTION",
         null,
@@ -90,6 +92,7 @@ class AiController {
     if (request.text().length() > 10000)
       throw new ApiException(
           413, "AI_INPUT_TOO_LARGE", "Customer email must be 10,000 characters or less.");
+    AiDiagnostics.validationSuccess();
     return assistance.tracked(
         "CUSTOMER_EXTRACTION",
         null,
@@ -126,36 +129,42 @@ class AiController {
   @PreAuthorize("@permissions.can('quotation.update')")
   @PostMapping("/draft-clarification")
   Object clarification(@Valid @RequestBody EnquiryId request) {
+    AiDiagnostics.validationSuccess();
     return assistance.draftClarification(request.enquiryId());
   }
 
   @PreAuthorize("@permissions.can('quotation.update')")
   @PostMapping("/quotations/{id}/text")
   Object quoteText(@PathVariable UUID id) {
+    AiDiagnostics.validationSuccess();
     return assistance.quoteText(id, "text");
   }
 
   @PreAuthorize("@permissions.can('quotation.update')")
   @PostMapping("/quotations/{id}/check")
   Object quoteCheck(@PathVariable UUID id) {
+    AiDiagnostics.validationSuccess();
     return assistance.quoteCheck(id);
   }
 
   @PreAuthorize("@permissions.can('quotation.update')")
   @PostMapping("/quotations/{id}/email")
   Object quoteEmail(@PathVariable UUID id) {
+    AiDiagnostics.validationSuccess();
     return assistance.quoteText(id, "email");
   }
 
   @PreAuthorize("@permissions.can('quotation.update')")
   @PostMapping("/quotations/{id}/terms")
   Object quoteTerms(@PathVariable UUID id) {
+    AiDiagnostics.validationSuccess();
     return assistance.quoteText(id, "terms");
   }
 
   @PreAuthorize("@permissions.can('customer.read')")
   @PostMapping("/customers/{id}/summary")
   Object customerSummary(@PathVariable UUID id) {
+    AiDiagnostics.validationSuccess();
     return assistance.customerSummary(id);
   }
 
@@ -165,6 +174,7 @@ class AiController {
     if (request.text().length() > 500)
       throw new ApiException(
           413, "AI_INPUT_TOO_LARGE", "Search text must be 500 characters or less.");
+    AiDiagnostics.validationSuccess();
     return assistance.naturalSearch(request.text());
   }
 }

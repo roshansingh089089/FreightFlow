@@ -1,5 +1,7 @@
 package com.freightflow.common.exception;
 
+import com.freightflow.ai.AiDiagnostics;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,7 +18,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public class ApiErrors {
   @ExceptionHandler(AccessDeniedException.class)
-  ResponseEntity<?> forbidden() {
+  ResponseEntity<?> forbidden(HttpServletRequest request) {
+    AiDiagnostics.error(request, "FORBIDDEN", null, 403);
     return ResponseEntity.status(403)
         .body(
             Map.of(
@@ -33,7 +36,8 @@ public class ApiErrors {
   }
 
   @ExceptionHandler(AuthenticationException.class)
-  ResponseEntity<?> unauthenticated() {
+  ResponseEntity<?> unauthenticated(HttpServletRequest request) {
+    AiDiagnostics.error(request, "UNAUTHORIZED", null, 401);
     return ResponseEntity.status(401)
         .body(
             Map.of(
@@ -50,7 +54,8 @@ public class ApiErrors {
   }
 
   @ExceptionHandler(ApiException.class)
-  ResponseEntity<?> api(ApiException e) {
+  ResponseEntity<?> api(ApiException e, HttpServletRequest request) {
+    AiDiagnostics.error(request, e.code, e, e.status);
     return ResponseEntity.status(e.status)
         .body(
             Map.of(
@@ -67,7 +72,8 @@ public class ApiErrors {
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
-  ResponseEntity<?> validation(MethodArgumentNotValidException e) {
+  ResponseEntity<?> validation(MethodArgumentNotValidException e, HttpServletRequest request) {
+    AiDiagnostics.error(request, "VALIDATION_ERROR", e, 400);
     Map<String, String> fields = new LinkedHashMap<>();
     e.getBindingResult()
         .getFieldErrors()
@@ -91,7 +97,8 @@ public class ApiErrors {
     HttpMessageNotReadableException.class,
     MethodArgumentTypeMismatchException.class
   })
-  ResponseEntity<?> malformed() {
+  ResponseEntity<?> malformed(HttpServletRequest request) {
+    AiDiagnostics.error(request, "VALIDATION_ERROR", null, 400);
     return ResponseEntity.badRequest()
         .body(
             Map.of(
@@ -108,7 +115,8 @@ public class ApiErrors {
   }
 
   @ExceptionHandler(DataIntegrityViolationException.class)
-  ResponseEntity<?> conflict() {
+  ResponseEntity<?> conflict(HttpServletRequest request) {
+    AiDiagnostics.error(request, "CONFLICT", null, 409);
     return ResponseEntity.status(409)
         .body(
             Map.of(
@@ -125,7 +133,8 @@ public class ApiErrors {
   }
 
   @ExceptionHandler(Exception.class)
-  ResponseEntity<?> other(Exception e) {
+  ResponseEntity<?> other(Exception e, HttpServletRequest request) {
+    AiDiagnostics.error(request, "SERVER_ERROR", e, 500);
     return ResponseEntity.status(500)
         .body(
             Map.of(

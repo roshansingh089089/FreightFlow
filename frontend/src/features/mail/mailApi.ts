@@ -33,6 +33,8 @@ export type Draft = {
   reconciledAt: string | null;
   reconciliationNote: string | null;
   threadingWarning: string | null;
+  fromAddress?: string | null;
+  sentAt?: string | null;
 };
 export type DraftInput = Pick<
   Draft,
@@ -136,6 +138,9 @@ export const mailApi = {
     json<Page<MailThread>>(`/customers/${id}/mail-threads?page=${page}`),
   customerConversations: (id: string) =>
     json<Conversation[]>(`/customers/${id}/conversations`),
+  sentCopyStatus: (id: string) => json<{status: string; errorCode: string}>(`/mail/stored/${id}/sent-copy`),
+  storedDetail: (id: string) => json<Draft>(`/mail/stored/${id}`),
+  attachmentMetadata: (id: string) => json<MailAttachment>(`/mail/attachments/${id}/metadata`),
   stored: (params: URLSearchParams) =>
     json<Page<Draft>>(`/mail/stored?${params.toString()}`),
   search: (params: URLSearchParams) =>

@@ -1,42 +1,32 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Anchor,
   ArrowRight,
-  Bell,
   ChartColumn,
-  ChevronDown,
   FileText,
   FolderOpen,
   LayoutDashboard,
-  LogOut,
   Mail,
   MessagesSquare,
-  PanelLeft,
-  Search,
   Settings,
   Ship,
-  Sparkles,
   Users,
   Wallet,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useState } from 'react';
-import {
-  Link,
-  Navigate,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
-import { GlobalAiDrawer } from '../../features/ai/AiAssist';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import CustomerWorkspace from '../../features/customers/CustomerWorkspace';
+import EmailComposer from '../../features/mail/EmailComposer';
 import {
   getCurrentMailConnection,
   getMailCounts,
   mailConnectionKey,
   mailCountsKey,
 } from '../../features/mail/mailConnection';
+import type { ComposerRequest } from '../../features/mail/openComposer';
 import { PageContainer } from '../../shared/components/PageElements';
-import { api, post, useData } from '../../shared/lib/workspace';
+import { useData } from '../../shared/lib/workspace';
+import { AppHeader } from './AppHeader';
 import { WorkspaceLayoutContext, type WorkspaceMode } from './WorkspaceLayout';
 const workspaceNav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
@@ -52,16 +42,31 @@ const deskNav = [
   ['Reports', '/reports', ChartColumn],
 ] as const;
 export function AppLayout() {
-  const nav = useNavigate();
   const location = useLocation();
   const me = useData('me', '/auth/me');
-  const queryClient = useQueryClient();
-  const [menu, setMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [notice, setNotice] = useState('');
-  const [search, setSearch] = useState('');
-  const [debounced, setDebounced] = useState('');
+  const [floatingComposer, setFloatingComposer] = useState<
+    (ComposerRequest & { key: number }) | null
+  >(null);
+  const floatingComposerRef = useRef(false);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const request = (event as CustomEvent<ComposerRequest>).detail || {};
+      if (floatingComposerRef.current) {
+        setNotice(
+          'Close the current draft before starting another message. Your draft will be saved.',
+        );
+        setTimeout(() => setNotice(''), 4000);
+        window.dispatchEvent(new Event('ff-restore-mail-composer'));
+        return;
+      }
+      floatingComposerRef.current = true;
+      setFloatingComposer({ ...request, key: Date.now() });
+    };
+    window.addEventListener('ff-open-mail-composer', open);
+    return () => window.removeEventListener('ff-open-mail-composer', open);
+  }, []);
   const [mode, setModeState] = useState<WorkspaceMode>(() => {
     const saved = sessionStorage.getItem('ff-workspace-mode');
     return window.location.pathname === '/mail'
@@ -113,15 +118,6 @@ export function AppLayout() {
     window.addEventListener('ff-toast', handler);
     return () => window.removeEventListener('ff-toast', handler);
   }, []);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(search), 300);
-    return () => clearTimeout(t);
-  }, [search]);
-  const results = useQuery({
-    queryKey: ['search', debounced],
-    queryFn: () => api('/search?q=' + encodeURIComponent(debounced)),
-    enabled: debounced.length >= 2,
-  });
   if (me.isLoading)
     return (
       <div className="app-loading">
@@ -135,6 +131,8 @@ export function AppLayout() {
     <Link
       key={target}
       to={target}
+      title={label}
+      aria-label={label}
       onClick={() => {
         setSidebarOpen(false);
         if (target === '/mail') setMode('mail');
@@ -179,9 +177,15 @@ export function AppLayout() {
   );
   return (
     <WorkspaceLayoutContext.Provider value={{ mode, setMode }}>
-      <div className="app-shell">
+      <div
+        className={
+          'app-shell' +
+          (mode === 'mail' ? ' app-shell-mail-mode' : '') +
+          (mode === 'mail' || mode === 'split' ? ' app-shell-mail-layout' : '')
+        }
+      >
         <aside className={'app-sidebar' + (sidebarOpen ? ' is-open' : '')}>
-          <div className="sidebar-brand">
+          <div className="sidebar-brand" aria-label="FreightFlow">
             <Anchor size={28} />
             <span>
               Freight<span>Flow</span>
@@ -215,6 +219,8 @@ export function AppLayout() {
           <nav aria-label="Desk navigation">{deskNav.map(navItem)}</nav>
           <Link
             to="/settings"
+            title="Settings"
+            aria-label="Settings"
             aria-current={path === '/settings' ? 'page' : undefined}
             onClick={() => {
               setSidebarOpen(false);
@@ -226,7 +232,7 @@ export function AppLayout() {
             }
           >
             <Settings size={18} />
-            Settings
+            <span>Settings</span>
           </Link>
           <Link className="dashboard-sidebar-promo" to="/enquiries/new">
             <strong>
@@ -247,117 +253,14 @@ export function AppLayout() {
           />
         )}
         <div className="app-content">
-          <header className="app-topbar">
-            <button
-              className="menu-toggle"
-              aria-label="Open navigation"
-              onClick={() => setSidebarOpen(true)}
-            >
-              ☰
-            </button>
-            <button
-              className="topbar-back"
-              onClick={() => nav(-1)}
-              aria-label="Go back"
-            >
-              <ArrowRight size={17} />
-              <span>Back</span>
-            </button>
-            <div className="global-search">
-              <Search size={18} />
-              <input
-                aria-label="Search workspace"
-                placeholder="Search mail, customers, quotations, shipments..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search.length >= 2 && (
-                <div className="search-results">
-                  {results.isLoading
-                    ? 'Searching...'
-                    : results.data &&
-                      Object.entries(results.data).map(
-                        ([group, items]: any) => (
-                          <div key={group}>
-                            <p>{group}</p>
-                            {items.map((item: any) => (
-                              <Link
-                                key={item.id}
-                                to={`/${group}/${item.id}`}
-                                onClick={() => setSearch('')}
-                              >
-                                {item.companyName ||
-                                  item.enquiryCode ||
-                                  item.quotationNumber}
-                              </Link>
-                            ))}
-                          </div>
-                        ),
-                      )}
-                </div>
-              )}
-            </div>
-            <button className="topbar-ai" onClick={() => setAiOpen(true)}>
-              <Sparkles size={15} /> AI Assist
-            </button>
-            <div
-              className="cw-mode-switch"
-              role="group"
-              aria-label="Screen layout"
-            >
-              {(
-                [
-                  ['mail', 'Mail', Mail],
-                  ['split', 'Side by side', PanelLeft],
-                  ['platform', 'Platform', Users],
-                ] as const
-              ).map(([value, label, Icon]) => (
-                <button
-                  key={value}
-                  className={mode === value ? 'active' : ''}
-                  aria-pressed={mode === value}
-                  onClick={() => setMode(value)}
-                >
-                  <Icon size={14} />
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="topbar-actions">
-              <Bell size={18} aria-label="Notifications" />
-              <div className="user-menu">
-                <button
-                  onClick={() => setMenu(!menu)}
-                  aria-expanded={menu}
-                  aria-label="Account menu"
-                >
-                  <span className="user-avatar">{u.fullName?.[0]}</span>
-                  <span className="user-copy">
-                    <strong>{u.fullName}</strong>
-                    <small>{u.companyName}</small>
-                  </span>
-                  <ChevronDown size={15} />
-                </button>
-                {menu && (
-                  <div className="user-dropdown">
-                    <Link to="/settings" onClick={() => setMenu(false)}>
-                      Profile & settings
-                    </Link>
-                    <button
-                      onClick={async () => {
-                        await post('/auth/logout', {});
-                        queryClient.clear();
-                        nav('/login');
-                      }}
-                    >
-                      <LogOut size={16} />
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </header>
+          <AppHeader
+            mode={mode}
+            setMode={setMode}
+            fullName={u.fullName}
+            companyName={u.companyName}
+            notice={notice}
+            onOpenNavigation={() => setSidebarOpen(true)}
+          />
           <main
             className={
               'app-main app-main-' +
@@ -401,16 +304,22 @@ export function AppLayout() {
             ) : customerWorkspace ? (
               mainContent
             ) : (
-              <div className={'app-panes app-panes-' + mode}>
+              <div
+                className={
+                  'app-panes app-panes-' +
+                  mode +
+                  (mode === 'split' ? ' ff-mail-split' : '')
+                }
+              >
                 <section
-                  className="app-mail-pane"
+                  className="app-mail-pane ff-mail-pane"
                   aria-label="Mail"
                   hidden={mode === 'platform'}
                 >
                   <CustomerWorkspace embeddedMail />
                 </section>
                 <section
-                  className="app-platform-pane"
+                  className="app-platform-pane ff-platform-pane"
                   aria-label="Platform page"
                   hidden={mode === 'mail'}
                 >
@@ -430,7 +339,18 @@ export function AppLayout() {
             )}
           </main>
         </div>
-        {aiOpen && <GlobalAiDrawer onClose={() => setAiOpen(false)} />}
+        {floatingComposer && (
+          <div className="mail-floating-composer ff-page">
+            <EmailComposer
+              key={floatingComposer.key}
+              context={floatingComposer}
+              onClose={() => {
+                floatingComposerRef.current = false;
+                setFloatingComposer(null);
+              }}
+            />
+          </div>
+        )}
       </div>
     </WorkspaceLayoutContext.Provider>
   );

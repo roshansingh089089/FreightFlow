@@ -1,0 +1,215 @@
+/* One authenticated header contract for every route and workspace mode. */
+.app-shell {
+  --app-header-height: 68px;
+}
+.app-shell .app-topbar.app-global-header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: grid;
+  grid-template-columns: minmax(60px, 1fr) auto minmax(70px, 1fr);
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
+  padding: 0 22px;
+  background: #fff;
+  border-bottom: 1px solid var(--ff-border);
+}
+.app-global-header .app-header-left,
+.app-global-header .app-header-centre,
+.app-global-header .app-header-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.app-global-header .app-header-left {
+  justify-self: start;
+  gap: 8px;
+}
+.app-global-header .app-header-centre {
+  justify-self: center;
+  gap: 28px;
+}
+.app-global-header .app-header-right {
+  justify-self: end;
+  gap: 18px;
+}
+.app-global-header .topbar-ai {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.app-global-header .cw-mode-switch {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.app-global-header .cw-mode-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.app-global-header .app-header-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #625968;
+  border-radius: 7px;
+}
+.app-global-header .app-header-icon:hover,
+.app-global-header .app-header-icon[aria-expanded='true'] {
+  background: var(--ff-primary-soft);
+  color: var(--ff-primary);
+}
+.app-global-header .app-header-notifications {
+  position: relative;
+}
+.app-global-header .app-header-popover,
+.app-global-header .app-header-account {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 40;
+  width: min(340px, calc(100vw - 24px));
+  padding: 14px;
+  border: 1px solid var(--ff-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 35px #19221d1c;
+}
+.app-global-header .app-header-popover p {
+  margin: 8px 0 0;
+  color: var(--ff-text-muted);
+  font-size: 12px;
+}
+.app-global-header .app-header-account {
+  display: grid;
+  gap: 8px;
+}
+.app-global-header .app-header-search-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ff-text-muted);
+}
+.app-global-header .global-search,
+.app-shell-mail-mode .app-global-header .global-search {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: 36px;
+  min-width: 0;
+  flex: none;
+}
+.app-global-header .app-header-search-results {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.app-global-header .app-header-search-results p {
+  margin: 6px 0;
+  color: var(--ff-text-muted);
+  font-size: 11px;
+}
+.app-global-header .app-header-search-results a {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.app-global-header .app-header-search-results a:hover {
+  background: var(--ff-primary-soft);
+}
+.app-global-header .user-copy {
+  min-width: 0;
+  max-width: 150px;
+}
+.app-global-header .user-copy strong,
+.app-global-header .user-copy small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.app-global-header .user-menu > button {
+  white-space: nowrap;
+}
+.app-global-header :is(button, a, input):focus-visible {
+  outline: 2px solid var(--ff-primary);
+  outline-offset: 2px;
+}
+/* Mail and Platform retain their independent height and scroll boundaries. */
+.app-shell:has(.mmp-live) .app-topbar.app-global-header {
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
+}
+.app-shell:has(.mmp-live) .app-main-split,
+.app-main-split:has(.ff-mail-split) {
+  height: calc(100dvh - var(--app-header-height));
+}
+@media (min-width: 851px) {
+  .app-shell-mail-mode .app-topbar.app-global-header {
+    height: var(--app-header-height);
+    padding-inline: 22px;
+  }
+  .app-shell-mail-mode .customer-workspace,
+  .app-shell-mail-mode .cw-layout.cw-mail,
+  .app-shell-mail-mode .cw-mail-shell {
+    height: calc(100dvh - var(--app-header-height));
+  }
+}
+@media (max-width: 1180px) {
+  .app-shell .app-topbar.app-global-header {
+    gap: 10px;
+    padding-inline: 15px;
+  }
+  .app-global-header .app-header-centre {
+    gap: 12px;
+  }
+  .app-global-header .app-header-right {
+    gap: 8px;
+  }
+  .app-global-header .user-copy {
+    max-width: 95px;
+  }
+}
+@media (max-width: 900px) {
+  .app-global-header .user-copy {
+    display: none;
+  }
+  .app-global-header .topbar-back span {
+    display: none;
+  }
+}
+@media (max-width: 780px) {
+  .app-shell .app-topbar.app-global-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    height: var(--app-header-height);
+    padding-inline: 10px;
+  }
+  .app-global-header .app-header-centre {
+    gap: 6px;
+  }
+  .app-global-header .topbar-ai {
+    width: 34px;
+    padding: 0;
+  }
+  .app-global-header .topbar-ai span,
+  .app-global-header .cw-mode-switch button span {
+    display: none;
+  }
+  .app-global-header .cw-mode-switch button {
+    justify-content: center;
+    min-width: 33px;
+    padding: 6px;
+  }
+  .app-global-header .user-menu > button {
+    gap: 3px;
+  }
+}

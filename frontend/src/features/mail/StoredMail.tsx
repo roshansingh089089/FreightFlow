@@ -1,10 +1,45 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { apiFetch } from '../../api';
+import { SearchableSelect } from '../../shared/components/SearchableSelect';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { mailApi } from './mailApi';
 
 export default function StoredMail() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('messageId');
+  const selected = useQuery({
+    queryKey: ['stored-mail-detail', selectedId],
+    queryFn: () => mailApi.storedDetail(selectedId!),
+    enabled: !!selectedId,
+  });
+  const sentCopy = useQuery({
+    queryKey: ['sent-copy-status', selectedId],
+    queryFn: () => mailApi.sentCopyStatus(selectedId!),
+    enabled: !!selectedId && selected.data?.status === 'SENT',
+    refetchInterval: 15000,
+  });
+  const attachmentQueries = useQueries({
+    queries: (selected.data?.attachmentIds || []).map((id) => ({
+      queryKey: ['outbound-attachment', id],
+      queryFn: () => mailApi.attachmentMetadata(id),
+    })),
+  });
+  const selectMessage = (id: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('messageId', id);
+    setSearchParams(next);
+  };
+  const download = async (id: string, filename: string) => {
+    const response = await apiFetch(`/mail/attachments/${id}`);
+    if (!response.ok) return;
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
   const quotationId = searchParams.get('quotationId');
   const [subject, setSubject] = useState(''),
     [recipient, setRecipient] = useState(''),
@@ -96,25 +131,7 @@ export default function StoredMail() {
         </label>
         <label>
           Status
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="">All</option>
-            {[
-              'DRAFT',
-              'QUEUED',
-              'SENDING',
-              'SENT',
-              'NEEDS_REVIEW',
-              'FAILED',
-            ].map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
+          <SearchableSelect ariaLabel="Status" value={status} onChange={(next) => { setStatus(next); setPage(0); }} placeholder="All" allowClear options={['DRAFT', 'QUEUED', 'SENDING', 'SENT', 'NEEDS_REVIEW', 'FAILED'].map((value) => ({ value, label: value.replaceAll('_', ' ') }))} />
         </label>
         <label>
           From
@@ -147,7 +164,7 @@ export default function StoredMail() {
       <div className="card mail-page-list">
         {results.data?.content.map((message) => (
           <div className="mail-page-row" key={message.id}>
-            <strong>{message.subject || '(No subject)'}</strong>
+            <button type="button" aria-current={selectedId === message.id ? 'true' : undefined} onClick={() => selectMessage(message.id)}><strong>{message.subject || '(No subject)'}</strong></button>
             <p>
               To {message.to.map((item) => item.email).join(', ')} ·{' '}
               {message.status} · {new Date(message.createdAt).toLocaleString()}
@@ -211,6 +228,33 @@ export default function StoredMail() {
           </div>
         ))}
       </div>
+      {selectedId && (
+        <section className="card mail-page-message" aria-label="Selected mail">
+          {selected.isLoading && <p>Loading message…</p>}
+          {selected.error && <p role="alert">Could not open message: {(selected.error as Error).message}</p>}
+          {selected.data && <>
+            <h2>{selected.data.subject || '(No subject)'}</h2>
+            <p><strong>{selected.data.status}</strong> · {selected.data.sentAt ? new Date(selected.data.sentAt).toLocaleString() : 'Not sent'}</p>
+            {selected.data.status === 'NEEDS_REVIEW' && <p>SMTP outcome is uncertain. Review the provider Sent folder before resending.</p>}
+            {selected.data.status === 'SENT' && sentCopy.data && <p>Provider Sent copy: {sentCopy.data.status === 'SYNCED' ? 'Synced' : sentCopy.data.status === 'RETRY' ? 'Retrying' : 'Pending'}{sentCopy.data.errorCode ? ` (${sentCopy.data.errorCode})` : ''}</p>}
+            {selected.data.status === 'SENT' && sentCopy.error && <p role="alert">Could not check provider Sent copy.</p>}
+            {selected.data.status === 'FAILED' && <p role="alert">Delivery failed{selected.data.errorCode ? `: ${selected.data.errorCode}` : '.'}</p>}
+            <p>From: {selected.data.fromAddress || 'Mailbox not assigned'}</p>
+            <p>To: {selected.data.to.map((a) => a.email).join(', ') || '—'}</p>
+            {selected.data.cc.length > 0 && <p>CC: {selected.data.cc.map((a) => a.email).join(', ')}</p>}
+            {selected.data.bcc.length > 0 && <p>BCC: {selected.data.bcc.map((a) => a.email).join(', ')}</p>}
+            <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{selected.data.bodyText}</div>
+            {selected.data.attachmentIds.length > 0 && <div>
+              <h3>Attachments</h3>
+              {attachmentQueries.map((query, index) => <p key={selected.data!.attachmentIds[index]}>
+                {query.isLoading && 'Loading attachment…'}
+                {query.error && <span role="alert">Attachment unavailable</span>}
+                {query.data && <button type="button" onClick={() => void download(query.data!.id, query.data!.filename)}>{query.data.filename} ({Math.ceil(query.data.sizeBytes / 1024)} KB)</button>}
+              </p>)}
+            </div>}
+          </>}
+        </section>
+      )}
       {results.data && results.data.totalPages > 1 && (
         <div className="flex gap-3 mt-4">
           <button disabled={page === 0} onClick={() => setPage(page - 1)}>

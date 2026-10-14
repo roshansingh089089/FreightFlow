@@ -1,201 +1,476 @@
+import { useQuery } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowRight,
-  ChevronRight,
-  ClipboardCheck,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
   FileText,
-  MessagesSquare,
-  MoreVertical,
+  MessageSquareText,
   Plus,
-  Truck,
+  Send,
+  Sparkles,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  State,
-  StatusBadge,
-  Table,
-} from '../../shared/components/PageElements';
-import { date, useData } from '../../shared/lib/workspace';
+import { StatusBadge } from '../../shared/components/PageElements';
+import { api, date, fmt, useData } from '../../shared/lib/workspace';
+import { quotationRouteFromShipment } from '../quotations/quotationRoute';
 
-function KpiCard({
+type Enquiry = {
+  id: string;
+  enquiryCode: string;
+  customerName: string;
+  origin: string;
+  destination: string;
+  mode?: string;
+  status: string;
+  createdAt?: string;
+};
+type Quote = {
+  id: string;
+  quotationNumber: string;
+  customerName: string;
+  currency?: string;
+  totalAmount?: number;
+  status: string;
+  createdAt?: string;
+  validUntil?: string;
+  shipmentSnapshot?: string | null;
+};
+type Customer = {
+  id: string;
+  companyName: string;
+  status: string;
+  createdAt?: string;
+};
+type Page<T> = { content: T[]; totalElements: number };
+type Summary = {
+  newEnquiries: number;
+  quotesPending: number;
+  quotesSent: number;
+  customers: number;
+  recentEnquiries: Enquiry[];
+  expiringQuotes: Quote[];
+};
+
+function Kpi({
   label,
   value,
-  helper,
   icon: Icon,
   tone,
   to,
+  hint,
 }: {
   label: string;
-  value: number | undefined;
-  helper: string;
+  value?: number;
   icon: LucideIcon;
   tone: string;
   to: string;
+  hint: string;
 }) {
   return (
-    <Link to={to} className={`dashboard-kpi dashboard-kpi-${tone}`}>
-      <div className="dashboard-kpi-top">
-        <span className="dashboard-kpi-icon">
-          <Icon size={23} strokeWidth={2} />
-        </span>
-        <span className="dashboard-kpi-label">{label}</span>
-        <span className="dashboard-kpi-trend">Current</span>
-      </div>
-      <div className="dashboard-kpi-bottom">
-        <div>
-          <strong>{value ?? 0}</strong>
-          <small>{helper}</small>
-        </div>
-        <span className="dashboard-kpi-link" aria-hidden="true">
-          <ChevronRight size={18} />
-        </span>
-      </div>
-      <svg
-        className="dashboard-kpi-spark"
-        viewBox="0 0 120 48"
-        aria-hidden="true"
-      >
-        <path d="M0 39 C15 39 18 25 30 28 S46 40 58 29 S76 13 85 19 S99 7 120 6" />
-      </svg>
+    <Link className={`ops-kpi ops-${tone}`} to={to}>
+      <span className="ops-kpi-icon">
+        <Icon size={25} />
+      </span>
+      <span className="ops-kpi-copy">
+        <strong>{value ?? '—'}</strong>
+        <span>{label}</span>
+        <small>{hint}</small>
+      </span>
     </Link>
   );
 }
 
-export function Dashboard() {
-  const nav = useNavigate();
-  const me = useData('me', '/auth/me');
-  const q = useData('dashboard', '/dashboard/summary');
-  const firstName = me.data?.fullName?.split(' ')[0] || 'there';
-  const priorities =
-    (q.data?.expiringQuotes?.length || 0) + (q.data?.newEnquiries ? 1 : 0);
+function PanelHeading({
+  icon: Icon,
+  title,
+  to,
+}: {
+  icon: LucideIcon;
+  title: string;
+  to?: string;
+}) {
   return (
-    <State query={q}>
-      <div className="dashboard-page dashboard-reference">
-        <header className="dashboard-hero">
-          <div className="dashboard-hero-copy">
-            <span className="dashboard-eyebrow">DASHBOARD</span>
-            <h1>Good Morning, {firstName} 👋</h1>
-            <p>Here’s what’s happening with your freight business today.</p>
-          </div>
-          <Link className="dashboard-new-enquiry" to="/enquiries/new">
-            <Plus size={20} /> New Enquiry
-          </Link>
-        </header>
-        <div className="dashboard-master-grid">
-          <KpiCard
-            label="New Enquiries"
-            value={q.data?.newEnquiries}
-            helper="Awaiting a quotation"
-            icon={MessagesSquare}
-            tone="coral"
-            to="/enquiries"
-          />
-          <KpiCard
-            label="Quotes Pending"
-            value={q.data?.quotesPending}
-            helper="Draft quotations"
-            icon={FileText}
-            tone="green"
-            to="/quotations"
-          />
-          <KpiCard
-            label="Quotes Sent"
-            value={q.data?.quotesSent}
-            helper="With customers"
-            icon={Truck}
-            tone="orange"
-            to="/quotations"
-          />
-          <KpiCard
-            label="Customers"
-            value={q.data?.customers}
-            helper="In your workspace"
-            icon={Users}
-            tone="violet"
-            to="/customers"
-          />
+    <div className="ops-panel-heading">
+      <span className="ops-panel-heading-icon">
+        <Icon size={19} />
+      </span>
+      <h2>{title}</h2>
+      {to && (
+        <Link to={to}>
+          View all <ArrowRight size={14} />
+        </Link>
+      )}
+    </div>
+  );
+}
 
-          <section className="dashboard-panel dashboard-brief">
-            <header className="dashboard-panel-head">
-              <span className="dashboard-panel-icon dashboard-panel-icon-coral">
-                <ClipboardCheck size={22} />
-              </span>
-              <div className="dashboard-panel-title">
-                <h2>Tasks Requiring Attention</h2>
-                <p>Stay on top of urgent items and follow-ups</p>
+function route(origin?: string, destination?: string) {
+  return origin && destination
+    ? `${origin} → ${destination}`
+    : origin || destination || 'Route pending';
+}
+
+function quoteRoute(snapshot?: string | null) {
+  if (!snapshot) return 'Route pending';
+  try {
+    const shipment = JSON.parse(snapshot) as Record<string, string>;
+    if (
+      !shipment.origin &&
+      !shipment.polCode &&
+      !shipment.portOfLoading &&
+      !shipment.airportOfOrigin
+    )
+      return 'Route pending';
+    return quotationRouteFromShipment(shipment).label;
+  } catch {
+    return 'Route pending';
+  }
+}
+
+function activityDate(value?: string) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '—' : date(value);
+}
+
+export function Dashboard() {
+  const navigate = useNavigate();
+  const me = useData('me', '/auth/me');
+  const summary = useQuery<Summary>({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: () => api('/dashboard/summary'),
+  });
+  const quotes = useQuery<Page<Quote>>({
+    queryKey: ['dashboard', 'recent-quotes'],
+    queryFn: () => api('/quotations?page=0&size=5'),
+  });
+  const drafts = useQuery<Page<Quote>>({
+    queryKey: ['dashboard', 'draft-quotes'],
+    queryFn: () => api('/quotations?status=DRAFT&page=0&size=5'),
+  });
+  const customers = useQuery<Page<Customer>>({
+    queryKey: ['dashboard', 'recent-customers'],
+    queryFn: () =>
+      api('/customers?page=0&size=5&sort=createdAt&direction=desc'),
+  });
+  const activeCustomers = useQuery<Page<Customer>>({
+    queryKey: ['dashboard', 'active-customers'],
+    queryFn: () => api('/customers?status=ACTIVE&size=1'),
+  });
+  const data = summary.data;
+  const recentEnquiries = data?.recentEnquiries || [];
+  const recentQuotes = quotes.data?.content || [];
+  const pendingEnquiries = recentEnquiries.filter((enquiry) =>
+    ['NEW', 'PRICING_PENDING'].includes(enquiry.status),
+  );
+  const attention = [
+    ...pendingEnquiries.map((item) => ({
+      key: `enquiry-${item.id}`,
+      label: item.enquiryCode,
+      detail: `${item.customerName} · ${route(item.origin, item.destination)}`,
+      status: item.status,
+      to: `/enquiries/${item.id}`,
+      icon: MessageSquareText,
+    })),
+    ...(drafts.data?.content || []).map((item) => ({
+      key: `quote-${item.id}`,
+      label: item.quotationNumber,
+      detail: `${item.customerName} · Draft quotation`,
+      status: item.status,
+      to: `/quotations/${item.id}`,
+      icon: FileText,
+    })),
+  ].slice(0, 4);
+  const activity = [
+    ...recentEnquiries.map((item) => ({
+      key: `enquiry-${item.id}`,
+      label: 'Enquiry created',
+      detail: `${item.enquiryCode} · ${item.customerName}`,
+      at: item.createdAt,
+      to: `/enquiries/${item.id}`,
+      icon: MessageSquareText,
+    })),
+    ...recentQuotes.map((item) => ({
+      key: `quote-${item.id}`,
+      label: 'Quotation created',
+      detail: `${item.quotationNumber} · ${item.customerName}`,
+      at: item.createdAt,
+      to: `/quotations/${item.id}`,
+      icon: FileText,
+    })),
+    ...(customers.data?.content || []).map((item) => ({
+      key: `customer-${item.id}`,
+      label: 'Customer added',
+      detail: item.companyName,
+      at: item.createdAt,
+      to: `/customers/${item.id}`,
+      icon: Users,
+    })),
+  ]
+    .filter((item) => item.at && !Number.isNaN(new Date(item.at).getTime()))
+    .sort((a, b) => new Date(b.at!).getTime() - new Date(a.at!).getTime())
+    .slice(0, 4);
+  const firstName = me.data?.fullName?.split(' ')[0] || 'there';
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const openAi = () => window.dispatchEvent(new Event('ff-open-global-ai'));
+
+  return (
+    <div className="dashboard-page dashboard-reference ops-dashboard">
+      <header className="ops-hero">
+        <div>
+          <h1>
+            {greeting}, {firstName} 👋
+          </h1>
+          <p>Here’s your freight operations overview.</p>
+        </div>
+        <Link to="/enquiries/new" className="ops-hero-action">
+          <Plus size={17} /> New Enquiry
+        </Link>
+      </header>
+      <div className="ops-content">
+        {summary.isError && (
+          <p className="ops-error" role="alert">
+            Dashboard summary is unavailable. Recent records may still appear
+            below.
+          </p>
+        )}
+        <section className="ops-kpis" aria-label="Key metrics">
+          <Kpi
+            label="New Enquiries"
+            value={data?.newEnquiries}
+            icon={MessageSquareText}
+            tone="green"
+            to="/enquiries"
+            hint="Awaiting quotation"
+          />
+          <Kpi
+            label="Quotes Pending"
+            value={data?.quotesPending}
+            icon={FileText}
+            tone="amber"
+            to="/quotations"
+            hint="Draft quotations"
+          />
+          <Kpi
+            label="Quotes Sent"
+            value={data?.quotesSent}
+            icon={Send}
+            tone="blue"
+            to="/quotations"
+            hint="Sent to customers"
+          />
+          <Kpi
+            label="Active Customers"
+            value={activeCustomers.data?.totalElements}
+            icon={Users}
+            tone="purple"
+            to="/customers"
+            hint="Current active records"
+          />
+        </section>
+
+        <div className="ops-top-row">
+          <section className="ops-ai-brief" aria-labelledby="ops-ai-title">
+            <div className="ops-ai-main">
+              <div className="ops-ai-title">
+                <Sparkles size={22} />
+                <h2 id="ops-ai-title">FreightFlow AI – Operations Brief</h2>
+                <span>Live records</span>
               </div>
-              <span className="dashboard-priority-label">YOUR PRIORITIES</span>
-              <span className="dashboard-priority-count">{priorities}</span>
-              <Link
-                to="/quotations"
-                className="dashboard-round-link"
-                aria-label="View priorities"
-              >
-                <ChevronRight size={18} />
+              <p className="ops-brief-note">
+                Deterministic summary based on current records; no AI response
+                generated.
+              </p>
+              <ul>
+                {data?.newEnquiries ? (
+                  <li>
+                    <span />
+                    {data.newEnquiries} new{' '}
+                    {data.newEnquiries === 1
+                      ? 'enquiry requires'
+                      : 'enquiries require'}{' '}
+                    quotation review.
+                  </li>
+                ) : null}
+                {data?.quotesPending ? (
+                  <li>
+                    <span />
+                    {data.quotesPending} draft{' '}
+                    {data.quotesPending === 1
+                      ? 'quotation needs'
+                      : 'quotations need'}{' '}
+                    review.
+                  </li>
+                ) : null}
+                {data?.expiringQuotes?.length ? (
+                  <li>
+                    <span />
+                    {data.expiringQuotes.length} draft{' '}
+                    {data.expiringQuotes.length === 1
+                      ? 'quotation is'
+                      : 'quotations are'}{' '}
+                    nearing expiry.
+                  </li>
+                ) : null}
+                {pendingEnquiries[0] && (
+                  <li>
+                    <span />
+                    Prioritize {pendingEnquiries[0].enquiryCode} for{' '}
+                    {pendingEnquiries[0].customerName}.
+                  </li>
+                )}
+                {summary.isPending && (
+                  <li>
+                    <span />
+                    Loading operational priorities…
+                  </li>
+                )}
+                {summary.isError && (
+                  <li>
+                    <span />
+                    Operational priorities are unavailable.
+                  </li>
+                )}
+                {summary.isSuccess &&
+                  !data?.newEnquiries &&
+                  !data?.quotesPending &&
+                  !data?.expiringQuotes?.length && (
+                    <li>
+                      <span />
+                      No pending enquiries or draft quotations in the current
+                      summary.
+                    </li>
+                  )}
+              </ul>
+              <Link to="/enquiries" className="ops-brief-review">
+                Review pending work <ArrowRight size={15} />
               </Link>
-            </header>
-            <div className="dashboard-task-list">
-              {q.data?.expiringQuotes?.map((x: any) => (
-                <Link
-                  key={x.id}
-                  to={'/quotations/' + x.id}
-                  className="task-row"
-                >
-                  <span className="task-icon urgent">
-                    <FileText size={17} />
-                  </span>
-                  <span>
-                    <strong>{x.quotationNumber} expires soon</strong>
-                    <small>Review and send this draft quotation</small>
-                  </span>
-                  <time>{date(x.validUntil)}</time>
-                </Link>
-              ))}
-              {q.data?.newEnquiries > 0 && (
-                <Link to="/enquiries" className="task-row">
-                  <span className="task-icon">
-                    <MessagesSquare size={17} />
-                  </span>
-                  <span>
-                    <strong>{q.data.newEnquiries} new enquiries</strong>
-                    <small>Ready for your pricing team</small>
-                  </span>
-                  <ChevronRight size={17} />
-                </Link>
-              )}
-              {!priorities && (
-                <div className="dashboard-tasks-empty">
-                  <span className="dashboard-empty-art">
-                    <ClipboardCheck size={72} strokeWidth={1.15} />
-                  </span>
-                  <strong>You’re all caught up</strong>
-                  <p>No urgent tasks right now</p>
-                  <small>
-                    We’ll notify you here when there are tasks
-                    <br />
-                    that need your attention.
-                  </small>
-                </div>
+            </div>
+            <div className="ops-ai-help">
+              <span className="ops-ai-avatar">
+                <Sparkles size={23} />
+              </span>
+              <strong>Need help today?</strong>
+              <p>Ask about your freight workflow, customers or quotations.</p>
+              <button type="button" onClick={openAi}>
+                Ask FreightFlow AI <ArrowRight size={15} />
+              </button>
+            </div>
+          </section>
+          <section className="ops-panel ops-quick">
+            <PanelHeading icon={Plus} title="Quick Actions" />
+            <div className="ops-action-grid">
+              <Link to="/enquiries/new">
+                <MessageSquareText size={19} />
+                New Enquiry
+              </Link>
+              <Link
+                to="/enquiries"
+                title="Choose an enquiry to create a quotation"
+              >
+                <FileText size={19} />
+                New Quotation
+              </Link>
+              <Link to="/customers/new">
+                <Users size={19} />
+                Add Customer
+              </Link>
+              <Link to="/quotations">
+                <CheckCircle2 size={19} />
+                View Quotations
+              </Link>
+            </div>
+          </section>
+        </div>
+
+        <div className="ops-middle-row">
+          <section className="ops-panel ops-attention">
+            <PanelHeading
+              icon={AlertTriangle}
+              title="Needs Attention"
+              to="/enquiries"
+            />
+            <div className="ops-list">
+              {attention.length ? (
+                attention.map((item) => (
+                  <Link key={item.key} to={item.to} className="ops-list-row">
+                    <span className="ops-row-icon">
+                      <item.icon size={18} />
+                    </span>
+                    <span className="ops-row-main">
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                    <StatusBadge value={item.status} />
+                    <ArrowRight size={15} />
+                  </Link>
+                ))
+              ) : (
+                <p className="ops-empty">
+                  No pending records in the latest results.
+                </p>
               )}
             </div>
           </section>
-
-          <section className="dashboard-panel dashboard-inbox">
-            <header className="dashboard-panel-head">
-              <span className="dashboard-panel-icon dashboard-panel-icon-green">
-                <FileText size={22} />
-              </span>
-              <div className="dashboard-panel-title">
-                <h2>Recent Enquiries</h2>
-                <p>Latest customer enquiries across your workspace</p>
+          <section className="ops-panel ops-activity">
+            <PanelHeading icon={Clock3} title="Recent Activity" />
+            <div className="ops-list">
+              {activity.length ? (
+                activity.map((item) => (
+                  <Link key={item.key} to={item.to} className="ops-list-row">
+                    <span className="ops-row-icon">
+                      <item.icon size={17} />
+                    </span>
+                    <span className="ops-row-main">
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                    <time>{activityDate(item.at)}</time>
+                  </Link>
+                ))
+              ) : (
+                <p className="ops-empty">No dated activity is available yet.</p>
+              )}
+            </div>
+          </section>
+          <section className="ops-panel ops-overview">
+            <PanelHeading icon={CalendarDays} title="Operations at a glance" />
+            <div className="ops-overview-stats">
+              <div>
+                <strong>{data?.newEnquiries ?? '—'}</strong>
+                <span>New enquiries</span>
               </div>
-              <Link to="/enquiries" className="dashboard-view-all">
-                View all <ArrowRight size={16} />
-              </Link>
-            </header>
-            <div className="dashboard-table-wrap">
-              <Table className="dashboard-table">
+              <div>
+                <strong>{data?.quotesPending ?? '—'}</strong>
+                <span>Draft quotes</span>
+              </div>
+              <div>
+                <strong>{data?.quotesSent ?? '—'}</strong>
+                <span>Sent quotes</span>
+              </div>
+            </div>
+            <p>
+              Shipment tracking statistics will appear when shipment records are
+              available.
+            </p>
+          </section>
+        </div>
+
+        <div className="ops-table-row">
+          <section className="ops-panel ops-data-panel">
+            <PanelHeading
+              icon={MessageSquareText}
+              title="Recent Enquiries"
+              to="/enquiries"
+            />
+            <div className="ops-table-scroll">
+              <table>
                 <thead>
                   <tr>
                     <th>Enquiry ID</th>
@@ -203,59 +478,103 @@ export function Dashboard() {
                     <th>Route</th>
                     <th>Status</th>
                     <th>Date</th>
-                    <th aria-label="Actions" />
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {q.data?.recentEnquiries?.map((e: any) => (
+                  {recentEnquiries.map((item) => (
                     <tr
-                      key={e.id}
-                      className="clickable-row"
-                      tabIndex={0}
-                      onClick={() => nav('/enquiries/' + e.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') nav('/enquiries/' + e.id);
-                      }}
+                      key={item.id}
+                      onClick={() => navigate(`/enquiries/${item.id}`)}
                     >
                       <td>
-                        <Link
-                          to={'/enquiries/' + e.id}
-                          className="dashboard-table-id"
-                        >
-                          {e.enquiryCode}
+                        <Link to={`/enquiries/${item.id}`}>
+                          {item.enquiryCode}
                         </Link>
                       </td>
-                      <td>{e.customerName}</td>
+                      <td>{item.customerName}</td>
+                      <td>{route(item.origin, item.destination)}</td>
                       <td>
-                        <span className="dashboard-route">
-                          {e.origin} <ArrowRight size={13} /> {e.destination}
-                        </span>
+                        <StatusBadge value={item.status} />
                       </td>
+                      <td>{activityDate(item.createdAt)}</td>
                       <td>
-                        <StatusBadge value={e.status} />
-                      </td>
-                      <td>{date(e.createdAt)}</td>
-                      <td>
-                        <MoreVertical size={17} aria-hidden="true" />
+                        <Link
+                          to={`/enquiries/${item.id}`}
+                          aria-label={`Open ${item.enquiryCode}`}
+                        >
+                          <ArrowRight size={15} />
+                        </Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </Table>
-              {!q.data?.recentEnquiries?.length && (
-                <div className="dashboard-table-empty">
-                  <FileText size={30} />
-                  <strong>No enquiries yet</strong>
-                  <p>Create your first freight enquiry to get started.</p>
-                  <Link to="/enquiries/new">
-                    Create enquiry <ArrowRight size={14} />
-                  </Link>
-                </div>
+              </table>
+              {!recentEnquiries.length && (
+                <p className="ops-empty">No enquiries yet.</p>
+              )}
+            </div>
+          </section>
+          <section className="ops-panel ops-data-panel">
+            <PanelHeading
+              icon={FileText}
+              title="Recent Quotations"
+              to="/quotations"
+            />
+            <div className="ops-table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Quotation ID</th>
+                    <th>Customer</th>
+                    <th>Route</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentQuotes.map((item) => (
+                    <tr
+                      key={item.id}
+                      onClick={() => navigate(`/quotations/${item.id}`)}
+                    >
+                      <td>
+                        <Link to={`/quotations/${item.id}`}>
+                          {item.quotationNumber}
+                        </Link>
+                      </td>
+                      <td>{item.customerName}</td>
+                      <td>{quoteRoute(item.shipmentSnapshot)}</td>
+                      <td>
+                        {item.totalAmount != null
+                          ? `${item.currency || ''} ${fmt(item.totalAmount)}`
+                          : '—'}
+                      </td>
+                      <td>
+                        <StatusBadge value={item.status} />
+                      </td>
+                      <td>{activityDate(item.createdAt)}</td>
+                      <td>
+                        <Link
+                          to={`/quotations/${item.id}`}
+                          aria-label={`Open ${item.quotationNumber}`}
+                        >
+                          <ArrowRight size={15} />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!recentQuotes.length && (
+                <p className="ops-empty">No quotations yet.</p>
               )}
             </div>
           </section>
         </div>
       </div>
-    </State>
+    </div>
   );
 }

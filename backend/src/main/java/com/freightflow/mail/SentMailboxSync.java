@@ -88,7 +88,8 @@ class SentMailboxSync {
       } finally {
         sent.close(false);
       }
-      if (providerStoresSent(connection)) return new Outcome(sent.getFullName(), false);
+      if (providerStoresSent(connection) || copy.attempts() > 0)
+        return new Outcome(sent.getFullName(), false);
       MimeMessage mime = new MimeMessage(session, new ByteArrayInputStream(copy.mimeBytes()));
       sent.appendMessages(new Message[] {mime});
       return new Outcome(sent.getFullName(), true);
@@ -130,18 +131,20 @@ class SentMailboxSync {
         .trim();
   }
 
-  private static boolean containsMessageId(Folder folder, String messageId) throws Exception {
+  static boolean containsMessageId(Folder folder, String messageId) throws Exception {
     try {
       for (Message message : folder.search(new MessageIDTerm(messageId))) {
         if (matchesMessageId(message, messageId)) return true;
       }
     } catch (jakarta.mail.MessagingException ignored) {
-      // Some IMAP servers cannot SEARCH Message-ID; inspect recent headers instead.
+      // SEARCH is optional. A complete scan is required before APPEND is safe.
     }
     int count = folder.getMessageCount();
-    if (count > 0)
-      for (Message message : folder.getMessages(Math.max(1, count - 199), count))
+    for (int first = 1; first <= count; first += 200) {
+      for (Message message : folder.getMessages(first, Math.min(count, first + 199))) {
         if (matchesMessageId(message, messageId)) return true;
+      }
+    }
     return false;
   }
 

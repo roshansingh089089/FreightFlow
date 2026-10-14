@@ -13,6 +13,7 @@ import {
   ReferenceLocationPicker,
   type LocationOption,
 } from '../../shared/components/ReferenceLocationPicker';
+import { SearchableSelect } from '../../shared/components/SearchableSelect';
 import {
   CHARGE_DESCRIPTIONS,
   CONTAINER_TYPES,
@@ -613,15 +614,7 @@ export function QuoteForm() {
                 <div className="freight-field-grid freight-field-grid-quote">
                   <label>
                     <span className="label">Shipment mode</span>
-                    <select
-                      className="field"
-                      value={shipmentMode}
-                      onChange={(event) => selectMode(event.target.value)}
-                    >
-                      {['FCL', 'LCL', 'AIR', 'FTL', 'LTL'].map((mode) => (
-                        <option key={mode}>{mode}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect ariaLabel="Shipment mode" value={shipmentMode} onChange={selectMode} options={['FCL', 'LCL', 'AIR', 'FTL', 'LTL'].map((value) => ({ value, label: value }))} />
                   </label>
                   <label>
                     <span className="label">Customer reference</span>
@@ -687,18 +680,7 @@ export function QuoteForm() {
                     <>
                       <label>
                         <span className="label">Container type</span>
-                        <select
-                          className="field"
-                          value={shipment.containerType || ''}
-                          onChange={(event) =>
-                            shipmentChange('containerType', event.target.value)
-                          }
-                        >
-                          <option value="">Select container</option>
-                          {CONTAINER_TYPES.map((type) => (
-                            <option key={type}>{type}</option>
-                          ))}
-                        </select>
+                        <SearchableSelect ariaLabel="Container type" value={shipment.containerType || ''} onChange={(value) => shipmentChange('containerType', value)} placeholder="Select container" options={CONTAINER_TYPES.map((value) => ({ value, label: value }))} />
                       </label>
                       <label>
                         <span className="label">Container quantity</span>
@@ -893,18 +875,7 @@ export function QuoteForm() {
                 <h2>Scope &amp; currency</h2>
                 <label className="freight-currency-field freight-scope-term-field">
                   <span className="label">Incoterm</span>
-                  <select
-                    className="field"
-                    value={quoteIncoterm}
-                    onChange={(event) => selectIncoterm(event.target.value)}
-                  >
-                    <option value="">Select Incoterm</option>
-                    {INCOTERMS.map((term) => (
-                      <option key={term} value={term}>
-                        {term}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect ariaLabel="Incoterm" value={quoteIncoterm} onChange={selectIncoterm} placeholder="Select Incoterm" allowClear options={INCOTERMS.map((value) => ({ value, label: value }))} />
                 </label>
                 <div className="freight-scope-heading">
                   <strong>What this quotation covers</strong>
@@ -1005,19 +976,7 @@ export function QuoteForm() {
                 <div className="freight-currency-row">
                   <label className="freight-currency-field">
                     <span className="label">Quote currency</span>
-                    <select
-                      className="field"
-                      value={form.currency}
-                      onChange={(event) =>
-                        change('currency', event.target.value)
-                      }
-                    >
-                      {currencyOptions.map((currency) => (
-                        <option key={currency} value={currency}>
-                          {currency}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect ariaLabel="Quote currency" value={form.currency} onChange={(value) => change('currency', value)} options={currencyOptions.map((value) => ({ value, label: value }))} />
                   </label>
                   <p className="freight-currency-note">
                     Each charge can use its own currency. Included charges are
@@ -1151,27 +1110,21 @@ export function QuoteForm() {
                           />
                         </td>
                         <td>
-                          <select
-                            className="field"
-                            aria-label={`Charge ${index + 1} currency`}
+                          <SearchableSelect
+                            ariaLabel={`Charge ${index + 1} currency`}
                             value={line.currency || form.currency}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               change(
                                 'lines',
                                 form.lines.map((x: any, i: number) =>
                                   i === index
-                                    ? { ...x, currency: event.target.value }
+                                    ? { ...x, currency: value }
                                     : x,
                                 ),
                               )
                             }
-                          >
-                            {currencyOptions.map((currency) => (
-                              <option key={currency} value={currency}>
-                                {currency}
-                              </option>
-                            ))}
-                          </select>
+                            options={currencyOptions.map((value) => ({ value, label: value }))}
+                          />
                         </td>
                         <td>
                           {line.description === 'Destination charges' &&
@@ -1419,18 +1372,24 @@ export function QuoteDetail() {
     try {
       setCompose(await api(`/quotations/${id}/email-preview`));
       const response = await apiFetch('/mail/messages');
-      if (response.ok) {
-        const choices = await response.json();
-        const sourceId = q.data?.enquiry?.enquiry?.sourceMessageId;
-        if (
-          sourceId &&
-          !choices.some((message: { id: string }) => message.id === sourceId)
-        ) {
-          const sourceResponse = await apiFetch(`/mail/messages/${sourceId}`);
-          if (sourceResponse.ok) choices.unshift(await sourceResponse.json());
+      const choices: { id: string; subject: string; fromEmail: string }[] =
+        response.ok ? await response.json() : [];
+      const sourceId = q.data?.enquiry?.enquiry?.sourceMessageId;
+      if (sourceId) {
+        // Detail enforces the current tenant and active mailbox before selecting a reply.
+        const sourceResponse = await apiFetch(`/mail/messages/${sourceId}`);
+        if (sourceResponse.ok) {
+          const source = await sourceResponse.json();
+          if (!choices.some((message) => message.id === sourceId))
+            choices.unshift(source);
+          setReplySource(sourceId);
+        } else {
+          setReplySource('');
         }
-        setMailChoices(choices);
+      } else {
+        setReplySource('');
       }
+      setMailChoices(choices);
     } catch (e: any) {
       setErr(e.message);
     }
@@ -1601,18 +1560,7 @@ export function QuoteDetail() {
               <div className="badge">📎 {compose.attachment.filename}</div>
               <label className="block">
                 <span className="label">Conversation</span>
-                <select
-                  className="field"
-                  value={replySource}
-                  onChange={(event) => setReplySource(event.target.value)}
-                >
-                  <option value="">Compose new email</option>
-                  {mailChoices.map((message) => (
-                    <option key={message.id} value={message.id}>
-                      Reply to {message.fromEmail}: {message.subject}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect ariaLabel="Conversation" value={replySource} onChange={setReplySource} placeholder="Compose new email" allowClear options={mailChoices.map((message) => ({ value: message.id, label: `Reply to ${message.fromEmail}: ${message.subject}` }))} />
               </label>
               {err && <p className="text-red-600">{err}</p>}
               <div className="flex justify-end gap-2">

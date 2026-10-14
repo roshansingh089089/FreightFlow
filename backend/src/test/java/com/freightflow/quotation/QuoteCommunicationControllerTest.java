@@ -5,22 +5,15 @@ import static org.mockito.Mockito.*;
 
 import com.freightflow.auth.entity.AppUser;
 import com.freightflow.common.exception.ApiException;
-import com.freightflow.customer.entity.Customer;
-import com.freightflow.customer.entity.CustomerContact;
 import com.freightflow.customer.repository.ContactRepo;
-import com.freightflow.enquiry.entity.Enquiry;
 import com.freightflow.mail.EmailSender;
 import com.freightflow.mail.QuotationMailDraftService;
 import com.freightflow.quotation.entity.Quotation;
 import com.freightflow.quotation.repository.EmailLogRepo;
 import com.freightflow.quotation.repository.LineRepo;
 import com.freightflow.quotation.repository.QuoteRepo;
-import com.freightflow.tenant.entity.Tenant;
 import com.freightflow.tenant.repository.TenantRepo;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -95,100 +88,136 @@ class QuoteCommunicationControllerTest {
     quote.setTenantId(user.getTenantId());
     quote.setStatus("READY_TO_SEND");
     when(b.quote(id)).thenReturn(quote);
-    ApiException error =
-        assertThrows(
-            ApiException.class,
-            () ->
-                c.send(
-                    id,
-                    new QuoteCommunicationController.SendRequest(
-                        "buyer@example.test", "", "Subject", "Body")));
-    assertEquals("EMAIL_NOT_CONFIGURED", error.code);
+    assertEquals(
+        Map.of(),
+        c.send(
+            id,
+            new QuoteCommunicationController.SendRequest(
+                "buyer@example.test", "", "Subject", "Body")));
     verify(mail, never())
         .send(anyString(), anyString(), anyString(), anyString(), anyString(), any(byte[].class));
     verify(logs, never()).save(any());
   }
 
   @Test
-  void previewDoesNotSendAndSendRequiresExplicitCall() {
-    QuotationLookupService b = mock(QuotationLookupService.class);
-    ContactRepo contacts = mock(ContactRepo.class);
-    TenantRepo tenants = mock(TenantRepo.class);
-    EmailLogRepo logs = mock(EmailLogRepo.class);
-    EmailSender mail = mock(EmailSender.class);
-    QuoteRepo quotes = mock(QuoteRepo.class);
-    QuotationLifecycleService lifecycle = mock(QuotationLifecycleService.class);
-    QuoteCommunicationController c =
+  void previewDoesNotSendAndLegacyEndpointQueuesThroughDrafts() {
+    QuotationLookupService lookup = mock(QuotationLookupService.class);
+    QuotationMailDraftService drafts = mock(QuotationMailDraftService.class);
+    QuoteCommunicationController controller =
         spy(
             new QuoteCommunicationController(
-                b,
+                lookup,
                 mock(LineRepo.class),
-                quotes,
-                contacts,
-                tenants,
-                logs,
-                mail,
-                lifecycle,
-                mock(QuotationMailDraftService.class),
+                mock(QuoteRepo.class),
+                mock(ContactRepo.class),
+                mock(TenantRepo.class),
+                mock(EmailLogRepo.class),
+                mock(EmailSender.class),
+                mock(QuotationLifecycleService.class),
+                drafts,
                 mock(QuotationDocumentService.class)));
-    UUID id = UUID.randomUUID(),
-        tenant = UUID.randomUUID(),
-        customerId = UUID.randomUUID(),
-        enquiryId = UUID.randomUUID();
-    AppUser user = new AppUser();
-    user.setFullName("Agent One");
-    user.setTenantId(tenant);
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(user, null));
+    UUID id = UUID.randomUUID();
     Quotation quote = new Quotation();
-    quote.setTenantId(tenant);
-    quote.setStatus("READY_TO_SEND");
-    quote.setCustomerId(customerId);
-    quote.setEnquiryId(enquiryId);
+    quote.setId(id);
+    quote.setCustomerId(UUID.randomUUID());
     quote.setQuotationNumber("QT-2026-000001");
-    quote.setCurrency("USD");
-    quote.setTotalAmount(new BigDecimal("100.00"));
-    quote.setValidUntil(LocalDate.now().plusDays(7));
-    Enquiry enquiry = new Enquiry();
-    enquiry.setOrigin("Mumbai");
-    enquiry.setDestination("Hamburg");
-    enquiry.setMode("OCEAN");
-    Customer customer = new Customer();
-    customer.setId(customerId);
-    customer.setCompanyName("Acme");
-    CustomerContact contact = new CustomerContact();
-    contact.setName("Buyer");
-    contact.setEmail("buyer@example.test");
-    Tenant company = new Tenant();
-    company.setCompanyName("Forwarder");
-    when(b.quote(id)).thenReturn(quote);
-    when(b.enquiry(enquiryId)).thenReturn(enquiry);
-    when(b.customer(customerId)).thenReturn(customer);
-    when(contacts.findFirstByTenantIdAndCustomerIdAndPrimaryTrue(tenant, customerId))
-        .thenReturn(Optional.of(contact));
-    when(tenants.findById(tenant)).thenReturn(Optional.of(company));
-    when(mail.configured()).thenReturn(true);
-    when(lifecycle.claimSend(eq(quote), anyString())).thenReturn("CLAIMED");
-    doReturn(new byte[] {1, 2, 3}).when(c).render(quote);
-    var preview = c.preview(id);
-    assertEquals("buyer@example.test", preview.to());
-    verify(mail, never())
-        .send(anyString(), anyString(), anyString(), anyString(), anyString(), any(byte[].class));
-    assertEquals("READY_TO_SEND", quote.getStatus());
-    c.send(
-        id,
-        new QuoteCommunicationController.SendRequest(
-            preview.to(), "", preview.subject(), preview.body()));
-    verify(mail)
-        .send(
+    quote.setStatus("READY_TO_SEND");
+    when(lookup.quote(id)).thenReturn(quote);
+    doReturn(new byte[] {1, 2, 3}).when(controller).render(quote);
+    UUID draftId = UUID.randomUUID();
+    when(drafts.submitLegacy(
+            eq(id),
+            eq(quote.getCustomerId()),
+            eq("QT-2026-000001.pdf"),
+            any(),
             eq("buyer@example.test"),
             eq(""),
-            eq(preview.subject()),
-            eq(preview.body()),
-            eq("QT-2026-000001.pdf"),
-            argThat(bytes -> Arrays.equals(bytes, new byte[] {1, 2, 3})));
-    verify(quotes).save(quote);
-    verify(logs).save(argThat(log -> log.getStatus().equals("SENT")));
-    assertEquals("SENT", quote.getStatus());
+            eq("Subject"),
+            eq("Body"),
+            eq("quotation:" + id)))
+        .thenReturn(Map.of("status", "QUEUED", "draftId", draftId));
+    Object result =
+        controller.send(
+            id,
+            new QuoteCommunicationController.SendRequest(
+                "buyer@example.test", "", "Subject", "Body"));
+    assertEquals(Map.of("status", "QUEUED", "draftId", draftId), result);
+    verify(drafts)
+        .submitLegacy(
+            eq(id),
+            eq(quote.getCustomerId()),
+            anyString(),
+            any(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString());
+    assertEquals("READY_TO_SEND", quote.getStatus());
+  }
+
+  @Test
+  void quotationDraftPassesChosenSourceEmailToMailboxScopedReplyService() {
+    QuotationLookupService lookup = mock(QuotationLookupService.class);
+    QuotationMailDraftService drafts = mock(QuotationMailDraftService.class);
+    QuoteCommunicationController controller =
+        spy(
+            new QuoteCommunicationController(
+                lookup,
+                mock(LineRepo.class),
+                mock(QuoteRepo.class),
+                mock(ContactRepo.class),
+                mock(TenantRepo.class),
+                mock(EmailLogRepo.class),
+                mock(EmailSender.class),
+                mock(QuotationLifecycleService.class),
+                drafts,
+                mock(QuotationDocumentService.class)));
+    UUID id = UUID.randomUUID(), source = UUID.randomUUID(), draftId = UUID.randomUUID();
+    Quotation quote = new Quotation();
+    quote.setId(id);
+    quote.setCustomerId(UUID.randomUUID());
+    quote.setQuotationNumber("QT-2026-000001");
+    quote.setStatus("READY_TO_SEND");
+    when(lookup.quote(id)).thenReturn(quote);
+    doReturn(
+            new QuoteCommunicationController.Preview(
+                "buyer@example.test",
+                "",
+                "Quotation",
+                "Body",
+                new QuoteCommunicationController.Attachment("quote.pdf")))
+        .when(controller)
+        .preview(id);
+    doReturn(new byte[] {1}).when(controller).render(quote);
+    when(drafts.create(
+            eq(id),
+            eq(quote.getCustomerId()),
+            anyString(),
+            any(byte[].class),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            eq(source)))
+        .thenReturn(draftId);
+    assertEquals(
+        draftId,
+        controller
+            .mailDraft(
+                id,
+                new QuoteCommunicationController.MailDraftRequest(source, null, null, null, null))
+            .get("draftId"));
+    verify(drafts)
+        .create(
+            eq(id),
+            eq(quote.getCustomerId()),
+            anyString(),
+            any(byte[].class),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            eq(source));
   }
 }

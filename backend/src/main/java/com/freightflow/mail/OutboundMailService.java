@@ -78,7 +78,9 @@ record DraftResponse(
     UUID replyToOutboundMessageId,
     Instant reconciledAt,
     String reconciliationNote,
-    String threadingWarning) {}
+    String threadingWarning,
+    String fromAddress,
+    Instant sentAt) {}
 
 @Service
 class OutboundMailService {
@@ -408,6 +410,27 @@ class OutboundMailService {
     }
   }
 
+  void lockQuotationForLegacy(UUID quotationId) {
+    AppUser u = user();
+    quotes
+        .lockForMailSubmission(quotationId, u.getTenantId())
+        .orElseThrow(() -> new ApiException(404, "NOT_FOUND", "Quotation not found"));
+  }
+
+  DraftResponse existingSubmission(String key, UUID quotationId) {
+    AppUser u = user();
+    return messages
+        .findByTenantIdAndCreatedByAndIdempotencyKey(u.getTenantId(), u.getId(), key)
+        .map(
+            m -> {
+              if (!quotationId.equals(m.getQuotationId()))
+                throw new ApiException(
+                    409, "MAIL_IDEMPOTENCY_REUSED", "This send key was already used");
+              return view(m);
+            })
+        .orElse(null);
+  }
+
   DraftResponse get(UUID id) {
     return view(owned(id));
   }
@@ -464,9 +487,7 @@ class OutboundMailService {
         (root, query, cb) ->
             cb.and(
                 cb.equal(root.get("tenantId"), u.getTenantId()),
-                cb.or(
-                    cb.equal(root.get("createdBy"), u.getId()),
-                    cb.equal(root.get("status"), "SENT")));
+                cb.equal(root.get("createdBy"), u.getId()));
     if (customer != null)
       filters = filters.and((root, query, cb) -> cb.equal(root.get("customerId"), customer));
     if (quotation != null)
@@ -550,7 +571,9 @@ class OutboundMailService {
         m.getReconciliationNote(),
         !"NEW".equals(m.getComposeMode()) && m.getInReplyTo() == null
             ? "The original email has no valid Message-ID. This reply can be sent, but the recipient's mail app may not join it to the same conversation."
-            : null);
+            : null,
+        m.getFromAddress(),
+        m.getSentAt());
   }
 
   private static List<MailAddress> addresses(List<OutboundRecipient> rows, String type) {

@@ -41,6 +41,21 @@ class MailAttachmentController {
   }
 
   @PreAuthorize("@permissions.can('mail.read')")
+  @GetMapping("/{id}/metadata")
+  Map<String, Object> metadata(@PathVariable UUID id) {
+    OutboundAttachment a = service.owned(id);
+    return Map.of(
+        "id",
+        a.getId(),
+        "filename",
+        a.getFilename(),
+        "mediaType",
+        a.getMediaType(),
+        "sizeBytes",
+        a.getSizeBytes());
+  }
+
+  @PreAuthorize("@permissions.can('mail.read')")
   @GetMapping("/{id}")
   ResponseEntity<byte[]> download(@PathVariable UUID id) {
     OutboundAttachment a = service.owned(id);

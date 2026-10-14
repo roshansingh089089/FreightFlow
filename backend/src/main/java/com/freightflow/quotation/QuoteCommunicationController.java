@@ -9,7 +9,6 @@ import com.freightflow.enquiry.entity.Enquiry;
 import com.freightflow.mail.EmailSender;
 import com.freightflow.mail.QuotationMailDraftService;
 import com.freightflow.quotation.entity.Quotation;
-import com.freightflow.quotation.entity.QuotationEmailLog;
 import com.freightflow.quotation.repository.EmailLogRepo;
 import com.freightflow.quotation.repository.LineRepo;
 import com.freightflow.quotation.repository.QuoteRepo;
@@ -30,7 +29,6 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -392,49 +390,28 @@ class QuoteCommunicationController {
     return Map.of("draftId", draftId);
   }
 
-  @PreAuthorize("@permissions.can('quotation.send')")
+  @PreAuthorize(
+      "@permissions.can('quotation.send') and @permissions.can('mail.compose') and @permissions.can('mail.send')")
   @PostMapping("/{id}/send-email")
   Object send(@PathVariable UUID id, @Valid @RequestBody SendRequest r) {
     Quotation q = b.quote(id);
-    if (!q.getStatus().equals("READY_TO_SEND") && !q.getStatus().equals("SENT"))
+    if (!"READY_TO_SEND".equals(q.getStatus()) && !"SENT".equals(q.getStatus()))
       throw new ApiException(409, "QUOTE_NOT_FINALIZED", "Finalize the quotation before sending");
-    if (!emailClient.configured())
-      throw new ApiException(503, "EMAIL_NOT_CONFIGURED", "Mail account not configured.");
     String key =
         r.idempotencyKey() == null || r.idempotencyKey().isBlank()
             ? "quotation:" + id
             : r.idempotencyKey();
-    String claimed = lifecycle.claimSend(q, key);
-    if (!"CLAIMED".equals(claimed)) return Map.of("status", claimed);
-    QuotationEmailLog log = new QuotationEmailLog();
-    log.setTenantId(q.getTenantId());
-    log.setQuotationId(q.getId());
-    log.setRecipient(r.to());
-    log.setCc(r.cc());
-    log.setSubject(r.subject());
-    log.setSentBy(SecurityConfig.current().getId());
-    try {
-      emailClient.send(
-          r.to(), r.cc(), r.subject(), r.body(), q.getQuotationNumber() + ".pdf", render(q));
-      q.setStatus("SENT");
-      q.setSentAt(Instant.now());
-      quotes.save(q);
-      log.setStatus("SENT");
-      logs.save(log);
-      lifecycle.finishSend(q, true);
-      return Map.of("status", "SENT", "sentAt", q.getSentAt());
-    } catch (Exception ex) {
-      lifecycle.finishSend(q, false);
-      log.setStatus("FAILED");
-      String message =
-          ex instanceof ApiException
-              ? ex.getMessage()
-              : "Email delivery failed. Check the provider configuration and try again.";
-      log.setErrorMessage(message);
-      logs.save(log);
-      if (ex instanceof ApiException api) throw api;
-      logger.error("Quotation email send failed for quotation {}", q.getId(), ex);
-      throw new ApiException(502, "EMAIL_FAILED", message);
-    }
+    var queued =
+        mailDrafts.submitLegacy(
+            q.getId(),
+            q.getCustomerId(),
+            q.getQuotationNumber() + ".pdf",
+            () -> render(q),
+            r.to(),
+            r.cc(),
+            r.subject(),
+            r.body(),
+            key);
+    return queued;
   }
 }

@@ -14,6 +14,7 @@
   --ff-control-height: 36px;
   --ff-control-height-compact: 36px;
   --ff-sidebar: #29212f;
+  --ff-sidebar-width: 196px;
   --ff-sidebar-hover: #3b3240;
   --ff-sidebar-active: #ffffff18;
   --ff-bg: #f6f5f2;
@@ -3940,27 +3941,9 @@ body {
 .app-panes > [hidden] {
   display: none !important;
 }
-.ff-page .cm-list-toolbar {
-  min-height: 46px;
-  padding: 9px 12px;
-}
-.ff-page .cm-list-toolbar h2 {
-  font-size: 15px;
-}
 .ff-page .cm-search {
   min-height: 36px;
   margin: 0 12px 8px;
-}
-.ff-page .cm-list-tabs button {
-  font-size: 12px;
-}
-.ff-page .cm-message-row {
-  min-height: 70px;
-  padding: 9px 10px;
-}
-.ff-page .cm-message-top strong,
-.ff-page .cm-message-subject {
-  font-size: 12px;
 }
 .ff-page .cm-detail-header {
   padding: 14px 16px 10px;
@@ -5128,4 +5111,876 @@ body {
   .ff-page .cw-customers .cw-customer-row > .cw-status {
     display: none;
   }
+}
+
+/* Mail colors and reading content remain here; track placement is owned by zz-mail-workspace.css. */
+.cm-workspace .cm-app-rail {
+  display: none;
+}
+.cm-workspace .cm-ribbon {
+  min-height: 48px;
+  padding: 6px 14px;
+  background: #fff;
+  gap: 8px;
+}
+.cm-workspace .cm-ribbon button,
+.cm-workspace .cm-ribbon > a {
+  font-size: 12px;
+  min-height: 32px;
+  gap: 6px;
+}
+.cm-workspace .cm-ribbon .cm-compose {
+  background: var(--ff-primary);
+  color: white;
+  border-color: var(--ff-primary);
+}
+.cm-mailbox-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ff-text-muted);
+  margin: 8px 7px 15px;
+}
+.cm-folder-compose {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  color: white;
+  background: var(--ff-primary);
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cm-folder-compose:hover {
+  color: white;
+  background: var(--ff-primary-hover);
+}
+.cm-workspace .cm-folder {
+  border-radius: 7px;
+  font-size: 12px;
+}
+.cm-workspace .cm-list-toolbar {
+  padding: 14px 14px 8px;
+}
+.cm-workspace .cm-list-toolbar h2 {
+  font-size: 17px;
+  margin: 2px 0;
+}
+.cm-workspace .cm-search {
+  margin: 6px 12px;
+}
+.cm-workspace .cm-list-tabs {
+  padding: 4px 12px 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cm-sort {
+  border: 0;
+  background: transparent;
+  color: var(--ff-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cm-workspace .cm-message-row {
+  border-bottom: 1px solid var(--ff-border);
+  border-radius: 0;
+  padding: 4px 6px;
+}
+.cm-workspace .cm-message-row.selected {
+  background: var(--ff-primary-soft);
+  box-shadow: inset 3px 0 var(--ff-primary);
+}
+.cm-workspace .cm-message-row.unread {
+  background: #f7fbf7;
+}
+.cm-workspace .cm-message-row.selected.unread {
+  background: var(--ff-primary-soft);
+}
+.cm-workspace .cm-detail-header {
+  padding: 19px 22px 12px;
+}
+.cm-workspace .cm-detail-toolbar {
+  padding: 8px 22px;
+  border-bottom: 1px solid var(--ff-border);
+}
+.cm-workspace .cm-detail-content {
+  padding: 20px 22px;
+}
+.cm-workspace .cm-detail-subject h2 {
+  font-size: 22px;
+  line-height: 1.25;
+}
+.cm-workspace .cm-body {
+  line-height: 1.65;
+}
+.cm-reading-column .cm-context-pane {
+  margin: 0;
+  padding: 18px 22px;
+  border: 0;
+  border-top: 1px solid var(--ff-border);
+  border-radius: 0;
+  background: #f8faf8;
+  display: grid;
+  gap: 12px;
+}
+.cm-intelligence-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ff-primary);
+  font-size: 13px;
+}
+.cm-workspace.cm-insights-open .cm-reading-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  overflow: hidden;
+}
+.cm-insights-open .cm-detail-pane {
+  grid-column: 1;
+  overflow-y: auto;
+}
+.cm-insights-open .cm-context-pane {
+  grid-column: 2;
+  grid-row: 1;
+  overflow-y: auto;
+  border-left: 1px solid var(--ff-border);
+  border-top: 0;
+  align-content: start;
+}
+.cm-workspace.cm-split,
+.app-main-split .cm-workspace.cm-split,
+.app-main-split .cm-split.cm-has-selection,
+.app-main-split .cm-split.cm-no-selection {
+  grid-template-columns: minmax(220px, 44fr) minmax(0, 56fr);
+}
+.cm-split > .cm-list-pane,
+.app-main-split .cm-split .cm-list-pane {
+  grid-column: 1;
+}
+.cm-split > .cm-reading-column,
+.app-main-split .cm-split > .cm-reading-column {
+  grid-column: 2;
+}
+.cm-split .cm-layout-toggle,
+.cm-split .cm-navigation,
+.cm-split .cm-context-pane {
+  display: none;
+}
+@container mail-workspace (max-width: 1050px) {
+  .cm-workspace.cm-insights-open .cm-reading-column {
+    display: block;
+    overflow-y: auto;
+  }
+  .cm-insights-open .cm-context-pane {
+    border-left: 0;
+    border-top: 1px solid var(--ff-border);
+  }
+}
+@container mail-workspace (max-width: 570px) {
+  .cm-workspace .cm-ribbon {
+    overflow-x: auto;
+  }
+}
+.cm-workspace.cm-mail:not(.cm-insights-open) .cm-context-pane {
+  display: none;
+}
+@container mail-workspace (max-width: 570px) {
+  .cm-workspace.cm-split,
+  .app-main-split .cm-workspace.cm-split,
+  .app-main-split .cm-split.cm-has-selection,
+  .app-main-split .cm-split.cm-no-selection {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cm-split > .cm-list-pane,
+  .cm-split > .cm-reading-column,
+  .app-main-split .cm-split > .cm-reading-column {
+    grid-column: 1;
+  }
+}
+
+/* Desktop navigation uses one labeled width in every workspace mode. */
+.app-shell-mail-mode .ff-page .cm-workspace {
+  border-radius: 6px;
+  box-shadow: none;
+}
+.app-shell-mail-mode .cm-mail .cm-navigation {
+  padding: 12px 8px;
+  background: #fbfcfb;
+}
+.app-shell-mail-mode .cm-mail .cm-navigation-title {
+  padding: 2px 9px 4px;
+  font-size: 12px;
+}
+.app-shell-mail-mode .cm-mailbox-name {
+  margin: 2px 9px 11px;
+  font-size: 11px;
+}
+.app-shell-mail-mode .cm-folder-compose {
+  min-height: 34px;
+  padding: 7px 10px;
+  margin: 0 4px 12px;
+  font-size: 11px;
+}
+.app-shell-mail-mode .cm-folder {
+  min-height: 32px;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+.app-shell-mail-mode .cm-manual-link {
+  margin-top: 12px;
+  font-size: 10px;
+}
+.app-shell-mail-mode .cm-ribbon {
+  min-height: 44px;
+  gap: 4px;
+  padding: 5px 10px;
+  border-bottom-color: #e9eeea;
+}
+.app-shell-mail-mode .cm-ribbon button,
+.app-shell-mail-mode .cm-ribbon > a {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 11px;
+  border-color: transparent;
+  border-radius: 6px;
+}
+.app-shell-mail-mode .cm-ribbon .cm-compose {
+  border-color: var(--ff-primary);
+}
+.app-shell-mail-mode .cm-ribbon .cm-more-menu {
+  margin-left: auto;
+}
+.app-shell-mail-mode .cm-mail .cm-list-pane {
+  background: #fff;
+}
+.app-shell-mail-mode .cm-search {
+  min-height: 32px;
+  height: 32px;
+  margin: 5px 11px 7px;
+}
+.app-shell-mail-mode .cm-message-list {
+  max-height: none;
+}
+.app-shell-mail-mode .cm-reading-column {
+  position: relative;
+  overflow-y: auto;
+}
+.app-shell-mail-mode .cm-detail-subject {
+  padding: 22px 30px 8px;
+  border-bottom: 1px solid #edf0ed;
+}
+.app-shell-mail-mode .cm-detail-subject h2 {
+  margin: 0 0 10px;
+  font-size: 23px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.app-shell-mail-mode .cm-detail-header,
+.app-shell-mail-mode .ff-page .cm-detail-header {
+  padding: 18px 30px;
+  align-items: center;
+  border-bottom: 1px solid #edf0ed;
+}
+.app-shell-mail-mode .cm-detail-header strong {
+  font-size: 13px;
+}
+.app-shell-mail-mode .cm-detail-header span,
+.app-shell-mail-mode .cm-detail-header small,
+.app-shell-mail-mode .cm-detail-header time {
+  font-size: 11px;
+}
+.app-shell-mail-mode .cm-detail-content,
+.app-shell-mail-mode .ff-page .cm-detail-content {
+  padding: 24px 30px 42px;
+}
+.app-shell-mail-mode .cm-body {
+  max-width: 74ch;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.app-shell-mail-mode .cm-detail-empty {
+  min-height: 0;
+  height: 100%;
+  padding: 30px;
+  color: #a5b3a9;
+}
+.app-shell-mail-mode .cm-detail-empty h2 {
+  margin-top: 10px;
+  font-size: 16px;
+  color: #3d5848;
+}
+.app-shell-mail-mode .cm-detail-empty p {
+  font-size: 12px;
+}
+.app-shell-mail-mode .cm-attachments {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid #edf0ed;
+}
+.app-shell-mail-mode .cm-attachments button {
+  margin: 5px 7px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ff-border);
+  border-radius: 7px;
+  background: #f8faf8;
+  font-size: 11px;
+}
+.app-shell-mail-mode .cm-insights-open .cm-reading-column {
+  display: block;
+}
+.app-shell-mail-mode .cm-insights-open .cm-detail-pane {
+  overflow: visible;
+}
+.app-shell-mail-mode .cm-insights-open .cm-context-pane {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  overflow-y: auto;
+  border-left: 1px solid var(--ff-border);
+  border-top: 0;
+  box-shadow: -10px 0 24px #182e221a;
+  align-content: start;
+}
+@media (min-width: 1800px) {
+  .app-shell-mail-mode .cm-insights-open .cm-reading-column {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .app-shell-mail-mode .cm-insights-open .cm-context-pane {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    box-shadow: none;
+  }
+}
+.app-shell-mail-mode .sidebar-link {
+  position: relative;
+}
+@media (max-width: 850px) {
+  .app-shell-mail-mode .cm-detail-subject,
+  .app-shell-mail-mode .cm-detail-header,
+  .app-shell-mail-mode .cm-detail-content {
+    padding-inline: 20px;
+  }
+}
+@media (max-width: 620px) {
+  .app-shell-mail-mode .cm-ribbon {
+    overflow-x: auto;
+  }
+}
+@media (min-width: 851px) {
+  .app-shell-mail-mode .sidebar-link > .sidebar-count {
+    display: block;
+  }
+}
+
+/* Meridian-informed Mail behavior, scoped to FreightFlow's existing components. */
+@media (min-width: 851px) {
+  .app-shell-mail-layout .app-sidebar,
+  .app-shell-mail-mode .app-sidebar {
+    width: 196px;
+    padding: 14px 10px;
+  }
+  .app-shell-mail-layout .sidebar-brand,
+  .app-shell-mail-mode .sidebar-brand {
+    justify-content: flex-start;
+    padding: 5px 8px 15px;
+    font-size: 19px;
+  }
+  .app-shell-mail-layout .sidebar-brand > span,
+  .app-shell-mail-layout .sidebar-label,
+  .app-shell-mail-layout .sidebar-link > span,
+  .app-shell-mail-mode .sidebar-brand > span,
+  .app-shell-mail-mode .sidebar-label,
+  .app-shell-mail-mode .sidebar-link > span {
+    display: inline;
+  }
+  .app-shell-mail-layout .sidebar-label,
+  .app-shell-mail-mode .sidebar-label {
+    display: block;
+    padding: 0 9px;
+    margin: 7px 0 5px;
+    font-size: 9px;
+  }
+  .app-shell-mail-layout .sidebar-profile,
+  .app-shell-mail-mode .sidebar-profile,
+  .app-shell-mail-layout .dashboard-sidebar-promo {
+    display: none;
+  }
+  .app-shell-mail-layout .sidebar-link,
+  .app-shell-mail-mode .sidebar-link {
+    width: 100%;
+    height: 38px;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 1px 0;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .app-shell-mail-layout .sidebar-settings,
+  .app-shell-mail-mode .sidebar-settings {
+    width: 100%;
+    height: 42px;
+    justify-content: flex-start;
+    margin: auto 0 0;
+    padding: 0 10px;
+  }
+  .app-shell-mail-mode .sidebar-link > .sidebar-count {
+    position: static;
+    transform: none;
+    display: inline-flex;
+  }
+}
+.app-shell-mail-layout .cm-ribbon button,
+.app-shell-mail-layout .cm-ribbon > a {
+  font-size: 13px;
+}
+.app-shell-mail-layout .cm-folder {
+  font-size: 13px;
+}
+.app-shell-mail-layout .cm-message-top strong,
+.app-shell-mail-layout .cm-message-subject {
+  font-size: 13px;
+}
+.app-shell-mail-layout .cm-message-top time,
+.app-shell-mail-layout .cm-message-meta {
+  font-size: 12px;
+}
+.app-shell-mail-layout .cm-detail-subject h2 {
+  font-size: 18px;
+}
+.app-shell-mail-layout .cm-body {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.cm-mail-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 17px;
+  padding: 11px 13px;
+  border: 1px solid #d9e8dc;
+  border-radius: 9px;
+  background: #f2f8f3;
+  color: var(--ff-primary);
+}
+.cm-mail-banner > div {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 190px;
+  min-width: 0;
+}
+.cm-mail-banner strong {
+  font-size: 13px;
+  color: var(--ff-text);
+}
+.cm-mail-banner span {
+  font-size: 12px;
+  color: var(--ff-text-muted);
+  line-height: 1.4;
+}
+.cm-mail-banner :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid #b9d9c2;
+  border-radius: 7px;
+  background: white;
+  color: var(--ff-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cm-mail-banner button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.cm-inline-reading {
+  min-width: 0;
+  padding: 16px 18px 20px;
+  border-left: 3px solid var(--ff-primary);
+  border-bottom: 1px solid var(--ff-border);
+  background: #fff;
+  box-shadow: inset 0 6px 8px -8px #182e2240;
+}
+.cm-inline-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  border-bottom: 1px solid var(--ff-border);
+  padding-bottom: 9px;
+}
+.cm-inline-heading h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+.cm-inline-heading time {
+  color: var(--ff-text-muted);
+  font-size: 12px;
+}
+.cm-inline-sender {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  align-items: baseline;
+  padding: 11px 0;
+  font-size: 13px;
+  overflow-wrap: break-word;
+}
+.cm-inline-sender small {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ff-text-muted);
+}
+.cm-inline-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 0 12px;
+}
+.cm-inline-reading .cm-body {
+  white-space: pre-wrap;
+}
+.cm-inline-reading .cm-attachments {
+  margin-top: 17px;
+}
+.cm-inline-enquiry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 17px;
+  color: var(--ff-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (min-width: 1101px) {
+  .app-main-split {
+    overflow: hidden;
+  }
+  .app-main-split .app-panes-split,
+  .app-main-split .cw-layout.cw-split {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    align-items: stretch;
+  }
+  .app-main-split .app-mail-pane,
+  .app-main-split .app-platform-pane,
+  .app-main-split .cw-mail-shell,
+  .app-main-split .cw-directory {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+.cm-inline-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--ff-border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ff-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.cm-inline-actions > button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cm-inline-summary {
+  margin: 0 0 12px;
+  padding: 11px 13px;
+  border: 1px solid #d9e8dc;
+  border-radius: 8px;
+  background: #f2f8f3;
+}
+.cm-inline-summary strong {
+  color: var(--ff-primary);
+  font-size: 12px;
+}
+.cm-inline-summary p {
+  margin: 5px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.cm-inline-summary small {
+  color: var(--ff-text-muted);
+  font-size: 11px;
+}
+.cm-inline-context {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ff-border);
+  font-size: 12px;
+}
+.cm-inline-context summary {
+  color: var(--ff-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.cm-inline-context :is(select, button, span) {
+  margin: 9px 8px 0 0;
+  font-size: 12px;
+}
+.cm-inline-context button {
+  color: var(--ff-primary);
+  font-weight: 700;
+}
+/* The legacy narrow split rule hid the list after selection; inline expansion keeps it visible. */
+.app-main-split .cm-split.cm-has-selection > .cm-list-pane,
+.app-main-split .cm-split.cm-no-selection > .cm-list-pane {
+  display: block;
+}
+.app-main-split .cm-split .cm-back-to-list {
+  display: none;
+}
+
+/* Meridian mail density, with FreightFlow's colors and real actions. */
+@media (min-width: 851px) {
+  .app-shell .app-sidebar {
+    width: var(--ff-sidebar-width);
+    flex: 0 0 var(--ff-sidebar-width);
+    padding: 14px 10px;
+  }
+  .app-shell .sidebar-brand {
+    justify-content: flex-start;
+    padding: 5px 8px 14px;
+    font-size: 19px;
+  }
+  .app-shell .sidebar-brand > span,
+  .app-shell .sidebar-link > span {
+    display: inline;
+  }
+  .app-shell .sidebar-label {
+    display: block;
+    padding: 0 9px;
+    margin: 7px 0 5px;
+    font-size: 9px;
+  }
+  .app-shell .sidebar-link {
+    width: 100%;
+    height: 38px;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 1px 0;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .app-shell .sidebar-settings {
+    width: 100%;
+    height: 42px;
+    justify-content: flex-start;
+    margin: auto 0 0;
+    padding: 0 10px;
+  }
+  .app-shell .sidebar-profile,
+  .app-shell .dashboard-sidebar-promo {
+    display: none;
+  }
+  .app-shell .sidebar-count {
+    position: static;
+    transform: none;
+    display: inline-flex;
+  }
+}
+
+.app-main .cm-workspace {
+  border-radius: 0;
+  box-shadow: none;
+}
+.app-shell-mail-mode .ff-page .cm-workspace {
+  border-radius: 0;
+  box-shadow: none;
+}
+.cm-workspace .cm-ribbon {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  background: #fafbf9;
+}
+.cm-ribbon-tabs {
+  display: flex;
+  gap: 4px;
+  min-height: 29px;
+  padding: 2px 10px 0;
+  border-bottom: 1px solid var(--ff-border);
+}
+.cm-ribbon-tabs button,
+.app-shell-mail-layout .cm-ribbon .cm-ribbon-tabs button {
+  min-height: 26px;
+  padding: 3px 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ff-text-muted);
+  font-size: 12px;
+}
+.cm-ribbon-tabs button[aria-selected='true'] {
+  border-bottom-color: var(--ff-primary);
+  color: var(--ff-primary);
+}
+.cm-ribbon-commands {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 47px;
+  padding: 5px 9px;
+}
+.cm-ribbon-commands > button,
+.cm-ribbon-commands > a,
+.cm-ribbon-commands .cm-folder-trigger,
+.cm-ribbon-commands .cm-more-menu > button,
+.app-shell-mail-layout .cm-ribbon-commands > button,
+.app-shell-mail-layout .cm-ribbon-commands > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.cm-ribbon-commands .cm-compose {
+  background: var(--ff-primary);
+  border-color: var(--ff-primary);
+  color: #fff;
+}
+.cm-ribbon-commands .cm-more-menu {
+  margin-left: auto;
+}
+.cm-ribbon-commands .cm-mail-action {
+  border-color: transparent;
+  background: transparent;
+}
+.cm-mail .cm-navigation {
+  padding: 8px;
+  background: #fbfcfb;
+}
+.cm-mail .cm-navigation-title {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.cm-mail .cm-folder {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: var(--ff-mail-sender-size, 13px);
+}
+.cm-mail .cm-manual-link {
+  font-size: 12px;
+}
+.cm-workspace .cm-detail-subject {
+  padding: 16px 20px 12px;
+}
+.cm-workspace .cm-detail-subject h2,
+.cm-workspace .cm-inline-heading h2 {
+  margin: 0;
+  font-size: var(--ff-mail-reader-subject-size, 18px);
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.cm-workspace .cm-detail-header,
+.app-shell-mail-mode .ff-page .cm-detail-header {
+  padding: 10px 20px;
+}
+.cm-workspace .cm-detail-header :is(strong, span, small, time),
+.cm-workspace .cm-inline-sender {
+  font-size: 13px;
+}
+.cm-reader-actions {
+  display: flex;
+  gap: 5px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--ff-border);
+}
+.cm-reader-actions .cm-mail-action {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.cm-workspace .cm-detail-content,
+.app-shell-mail-mode .ff-page .cm-detail-content {
+  padding: 16px 20px 20px;
+}
+.cm-workspace .cm-body,
+.app-main .cm-body {
+  max-width: none;
+  min-width: 0;
+  font-size: var(--ff-mail-body-size, 14px);
+  line-height: var(--ff-mail-body-leading, 1.65);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.cm-workspace .cm-conversation-message p {
+  font-size: var(--ff-mail-body-size, 14px);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.cm-workspace .cm-conversation-message {
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+.cm-workspace .cm-attachments {
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-top: 0;
+  border-bottom: 1px solid var(--ff-border);
+}
+.cm-workspace .cm-mail-banner {
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+.cm-inline-reading .cm-body {
+  font-size: var(--ff-mail-body-size, 14px);
+  line-height: var(--ff-mail-body-leading, 1.65);
+}
+.app-shell-mail-mode .cm-workspace.cm-mail.cm-reading-hidden,
+.app-shell-mail-mode .cm-workspace.cm-mail.cm-reading-hidden.cm-has-selection,
+.app-shell-mail-mode .cm-workspace.cm-mail.cm-reading-hidden.cm-no-selection {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cm-mail.cm-reading-hidden > .cm-reading-column {
+  display: none;
+}
+.cm-mail.cm-reading-hidden > .cm-navigation {
+  display: none;
+}
+.cm-mail.cm-reading-hidden > .cm-list-pane {
+  grid-column: 1;
 }

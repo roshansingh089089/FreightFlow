@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Maximize2, Minus, Paperclip, Sparkles, Trash2, X } from 'lucide-react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -13,6 +14,7 @@ import {
   type Address,
   type DraftInput,
 } from './mailApi';
+import type { ComposerRequest } from './openComposer';
 
 const schema = z.object({
   to: z.string().min(1, 'Add at least one recipient'),
@@ -31,14 +33,17 @@ const parseAddresses = (text: string): Address[] =>
 const validEmail = (value: string) => z.email().safeParse(value).success;
 const join = (items: Address[]) => items.map((item) => item.email).join(', ');
 
-export default function EmailComposer() {
+export default function EmailComposer({
+  context,
+  onClose,
+}: { context?: ComposerRequest; onClose?: () => void } = {}) {
   const nav = useNavigate(),
     qc = useQueryClient(),
     [params] = useSearchParams();
-  const customerId = params.get('customerId'),
-    quotationId = params.get('quotationId'),
-    enquiryId = params.get('enquiryId'),
-    draftId = params.get('draftId');
+  const customerId = context?.customerId ?? params.get('customerId'),
+    quotationId = context?.quotationId ?? params.get('quotationId'),
+    enquiryId = context?.enquiryId ?? params.get('enquiryId'),
+    draftId = context?.draftId ?? params.get('draftId');
   const [savedId, setSavedId] = useState(draftId),
     [attachments, setAttachments] = useState<
       { id: string; filename: string }[]
@@ -61,6 +66,137 @@ export default function EmailComposer() {
   const [showAiOptions, setShowAiOptions] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(
+    null,
+  );
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const composerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const resizeRef = useRef<{
+    pointerId: number;
+    axis: 'x' | 'y' | 'both';
+    startX: number;
+    startY: number;
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const resizeTo = (width: number, height: number, x: number, y: number) => {
+    const nextWidth = Math.min(Math.max(360, width), window.innerWidth);
+    const nextHeight = Math.min(Math.max(280, height), window.innerHeight);
+    setSize({ width: nextWidth, height: nextHeight });
+    setPosition({
+      x: Math.max(0, Math.min(x, window.innerWidth - nextWidth)),
+      y: Math.max(0, Math.min(y, window.innerHeight - nextHeight)),
+    });
+  };
+  const clampPosition = (x: number, y: number) => {
+    const composer = composerRef.current;
+    const width =
+      composer?.offsetWidth || composer?.getBoundingClientRect().width || 520;
+    const height =
+      composer?.offsetHeight || composer?.getBoundingClientRect().height || 450;
+    return {
+      x: Math.max(0, Math.min(x, window.innerWidth - width)),
+      y: Math.max(0, Math.min(y, window.innerHeight - height)),
+    };
+  };
+  useEffect(() => {
+    const onResize = () => {
+      setSize(
+        (current) =>
+          current && {
+            width: Math.min(current.width, window.innerWidth),
+            height: Math.min(current.height, window.innerHeight),
+          },
+      );
+      setPosition((current) => current && clampPosition(current.x, current.y));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  useEffect(() => {
+    if (position)
+      setPosition((current) => current && clampPosition(current.x, current.y));
+  }, [expanded, minimized]);
+  const onHeaderPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('nav'))
+      return;
+    const rect = composerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: rect.left,
+      y: rect.top,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const onHeaderPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setPosition(
+      clampPosition(
+        drag.x + event.clientX - drag.startX,
+        drag.y + event.clientY - drag.startY,
+      ),
+    );
+  };
+  const onHeaderPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!dragRef.current || dragRef.current.pointerId !== event.pointerId)
+      return;
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+  const onResizePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const rect = composerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    resizeRef.current = {
+      pointerId: event.pointerId,
+      axis:
+        (event.currentTarget.dataset.resize as 'x' | 'y' | 'both') || 'both',
+      startX: event.clientX,
+      startY: event.clientY,
+      width: rect.width,
+      height: rect.height,
+      x: rect.left,
+      y: rect.top,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const onResizePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const start = resizeRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    resizeTo(
+      start.width + (start.axis === 'y' ? 0 : event.clientX - start.startX),
+      start.height + (start.axis === 'x' ? 0 : event.clientY - start.startY),
+      start.x,
+      start.y,
+    );
+  };
+  const onResizePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!resizeRef.current || resizeRef.current.pointerId !== event.pointerId)
+      return;
+    resizeRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+  useEffect(() => {
+    const restore = () => setMinimized(false);
+    window.addEventListener('ff-restore-mail-composer', restore);
+    return () =>
+      window.removeEventListener('ff-restore-mail-composer', restore);
+  }, []);
   const [saveStatus, setSaveStatus] = useState<
     'idle' | 'saving' | 'saved' | 'error'
   >('idle');
@@ -305,7 +441,8 @@ export default function EmailComposer() {
         return;
       }
     }
-    nav(customerId ? `/customers/${customerId}` : '/mail');
+    if (onClose) onClose();
+    else nav(customerId ? `/customers/${customerId}` : '/mail');
   };
   const assist = async (
     action: 'DRAFT_EMAIL' | 'REWRITE' | 'IMPROVE_TONE' | 'ASK_MISSING',
@@ -398,6 +535,7 @@ export default function EmailComposer() {
   };
   return (
     <div
+      ref={composerRef}
       className={
         'email-composer email-composer-compact' +
         (expanded ? ' is-expanded' : '') +
@@ -406,8 +544,29 @@ export default function EmailComposer() {
       role="dialog"
       aria-label="Email composer"
       aria-modal="false"
+      style={{
+        ...(position
+          ? { position: 'fixed', left: position.x, top: position.y, zIndex: 1 }
+          : {}),
+        ...(!expanded && !minimized && size
+          ? { width: size.width, height: size.height }
+          : {}),
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          void close();
+        }
+      }}
     >
-      <header className="email-composer-header">
+      <header
+        className="email-composer-header"
+        title="Drag to move"
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onHeaderPointerMove}
+        onPointerUp={onHeaderPointerUp}
+        onPointerCancel={onHeaderPointerUp}
+      >
         <div className="email-composer-heading">
           <h1>
             {draft.data?.composeMode === 'REPLY_ALL'
@@ -733,7 +892,8 @@ export default function EmailComposer() {
                 className="email-discard"
                 onClick={async () => {
                   await mailApi.discard(savedId);
-                  nav('/mail/drafts');
+                  if (onClose) onClose();
+                  else nav('/mail/drafts');
                 }}
               >
                 <Trash2 size={15} aria-hidden="true" />
@@ -743,6 +903,57 @@ export default function EmailComposer() {
           </footer>
         </form>
       )}
+      {!minimized &&
+        !expanded &&
+        (
+          [
+            ['x', 'width'],
+            ['y', 'height'],
+            ['both', 'width and height'],
+          ] as const
+        ).map(([axis, label]) => (
+          <button
+            key={axis}
+            type="button"
+            data-resize={axis}
+            className={`email-composer-resize email-composer-resize-${axis}`}
+            aria-label={`Resize email composer ${label}`}
+            title={`Drag to resize ${label}`}
+            onPointerDown={onResizePointerDown}
+            onPointerMove={onResizePointerMove}
+            onPointerUp={onResizePointerUp}
+            onPointerCancel={onResizePointerUp}
+            onKeyDown={(event) => {
+              const step = event.shiftKey ? 50 : 20;
+              const dx =
+                axis === 'y'
+                  ? 0
+                  : event.key === 'ArrowRight'
+                    ? step
+                    : event.key === 'ArrowLeft'
+                      ? -step
+                      : 0;
+              const dy =
+                axis === 'x'
+                  ? 0
+                  : event.key === 'ArrowDown'
+                    ? step
+                    : event.key === 'ArrowUp'
+                      ? -step
+                      : 0;
+              if (!dx && !dy) return;
+              event.preventDefault();
+              const rect = composerRef.current?.getBoundingClientRect();
+              if (rect)
+                resizeTo(
+                  rect.width + dx,
+                  rect.height + dy,
+                  rect.left,
+                  rect.top,
+                );
+            }}
+          />
+        ))}
     </div>
   );
 }

@@ -8,8 +8,9 @@ import {
 } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, post } from '../../shared/lib/workspace';
-import { QuoteForm } from './QuotationPages';
+import { apiFetch } from '../../api';
+import { api, post, useData } from '../../shared/lib/workspace';
+import { QuoteDetail, QuoteForm } from './QuotationPages';
 
 vi.mock('../../shared/lib/workspace', () => ({
   api: vi.fn(async () => ({
@@ -37,6 +38,7 @@ vi.mock('../../shared/lib/workspace', () => ({
   fmt: (value: number) => String(value),
   useData: vi.fn(),
 }));
+vi.mock('../../api', () => ({ apiFetch: vi.fn() }));
 vi.mock('../ai/AiAssist', () => ({
   AiActionCard: () => null,
 }));
@@ -347,7 +349,9 @@ describe('quotation builder', () => {
         .getByRole('button', { name: /Cargo insurance/ })
         .getAttribute('aria-pressed'),
     ).toBe('false');
+    fireEvent.click(screen.getByRole('combobox', { name: 'Choose Quote currency' }));
     expect(screen.getByRole('option', { name: 'VND' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('combobox', { name: 'Choose Quote currency' }));
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
@@ -665,5 +669,82 @@ describe('quotation builder', () => {
       'ECB reference rates are unavailable',
     );
     expect(screen.queryByText('THB 100')).toBeNull();
+  });
+});
+
+describe('quotation mail conversation', () => {
+  const sourceId = '22222222-2222-4222-8222-222222222222';
+  const quote = {
+    data: {
+      quotationNumber: 'QT-2026-000001',
+      customerName: 'Acme',
+      status: 'READY_TO_SEND',
+      quotation: { termsAndConditions: 'Terms' },
+      lines: [],
+      enquiry: {
+        enquiry: {
+          sourceMessageId: sourceId,
+          origin: 'Mumbai',
+          destination: 'Hamburg',
+        },
+      },
+    },
+    isLoading: false,
+    error: null,
+  };
+  const open = async (sourceAccessible: boolean) => {
+    vi.mocked(useData).mockReturnValue(quote as any);
+    vi.mocked(api).mockResolvedValue({
+      to: 'buyer@example.test',
+      cc: '',
+      subject: 'Quotation',
+      body: 'Body',
+      attachment: { filename: 'quote.pdf' },
+    });
+    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+      if (path === '/mail/messages')
+        return { ok: true, json: async () => [] } as Response;
+      if (path === `/mail/messages/${sourceId}`)
+        return sourceAccessible
+          ? ({
+              ok: true,
+              json: async () => ({
+                id: sourceId,
+                subject: 'Enquiry',
+                fromEmail: 'buyer@example.test',
+              }),
+            } as Response)
+          : ({ ok: false } as Response);
+      return { ok: false } as Response;
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/quotations/quote-1']}>
+          <Routes>
+            <Route path="/quotations/:id" element={<QuoteDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Email Quote' }));
+    return screen.findByLabelText('Conversation') as Promise<HTMLSelectElement>;
+  };
+
+  it('preselects an accessible source email and permits Compose New', async () => {
+    const choice = await open(true);
+    await waitFor(() => expect(choice.value).toBe(sourceId));
+    fireEvent.change(choice, { target: { value: '' } });
+    expect(choice.value).toBe('');
+  });
+
+  it('does not select a source email outside the active mailbox', async () => {
+    const choice = await open(false);
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(`/mail/messages/${sourceId}`),
+    );
+    expect(choice.value).toBe('');
   });
 });

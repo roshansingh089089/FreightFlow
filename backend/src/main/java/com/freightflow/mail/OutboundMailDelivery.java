@@ -139,16 +139,51 @@ class OutboundMailDeliveryWorker {
   private final JdbcTemplate jdbc;
   private final OutboundMessageRepo messages;
   private final OutboundSmtpTransport transport;
+  private final OutboundAcceptanceService acceptance;
 
   OutboundMailDeliveryWorker(
-      JdbcTemplate jdbc, OutboundMessageRepo messages, OutboundSmtpTransport transport) {
+      JdbcTemplate jdbc,
+      OutboundMessageRepo messages,
+      OutboundSmtpTransport transport,
+      OutboundAcceptanceService acceptance) {
     this.jdbc = jdbc;
     this.messages = messages;
     this.transport = transport;
+    this.acceptance = acceptance;
+  }
+
+  void reconcileAccepted() {
+    List<UUID> ids =
+        jdbc.query(
+            "select distinct m.id from outbound_messages m join mail_send_attempts a "
+                + "on a.message_id=m.id and a.tenant_id=m.tenant_id "
+                + "where a.status='ACCEPTED' and (m.status in ('SENDING','NEEDS_REVIEW') "
+                + "or (m.status='SENT' and m.quotation_send_kind='PRIMARY' and exists "
+                + "(select 1 from quotations q where q.id=m.quotation_id and q.tenant_id=m.tenant_id "
+                + "and q.status='READY_TO_SEND'))) limit 10",
+            (ResultSet rs, int row) -> (UUID) rs.getObject(1));
+    for (UUID id : ids) {
+      OutboundMessage message = messages.findById(id).orElse(null);
+      if (message == null) continue;
+      UUID attemptId =
+          jdbc.query(
+              "select id from mail_send_attempts where message_id=? and tenant_id=? and status='ACCEPTED' "
+                  + "order by started_at desc limit 1",
+              rs -> rs.next() ? (UUID) rs.getObject(1) : null,
+              id,
+              message.getTenantId());
+      if (attemptId == null) continue;
+      try {
+        acceptance.complete(attemptId, message);
+      } catch (Exception e) {
+        log.warn("Accepted outbound mail {} is still awaiting local reconciliation", id, e);
+      }
+    }
   }
 
   @Scheduled(fixedDelayString = "${mail.outbox.poll-ms:5000}")
   void deliver() {
+    reconcileAccepted();
     jdbc.update(
         "update mail_send_attempts set status='UNKNOWN',error_code='AMBIGUOUS_OUTCOME',completed_at=now() "
             + "where status='SENDING' and started_at<now()-interval '5 minutes'");
@@ -173,30 +208,43 @@ class OutboundMailDeliveryWorker {
           id,
           message.getSendAttempts(),
           "SENDING");
+      boolean accepted = false;
       try {
         transport.send(message);
-        jdbc.update(
-            "update mail_send_attempts set status='ACCEPTED',completed_at=now() where id=?",
-            attemptId);
-        jdbc.update(
-            "update outbound_messages set status='SENT',sent_at=now(),updated_at=now(),error_code=null where id=? and status='SENDING'",
-            id);
-        if (message.getQuotationId() != null)
-          jdbc.update(
-              "update quotations set status='SENT',sent_at=now(),updated_at=now() where id=? and tenant_id=? and status='READY_TO_SEND'",
-              message.getQuotationId(),
-              message.getTenantId());
+        // Durable evidence before the atomic local status update. Reconciliation never resends
+        // SMTP.
+        if (jdbc.update(
+                "update mail_send_attempts set status='ACCEPTED',completed_at=now() where id=? and tenant_id=? and status='SENDING'",
+                attemptId,
+                message.getTenantId())
+            != 1) throw new IllegalStateException("SMTP acceptance could not be recorded");
+        accepted = true;
+        acceptance.complete(attemptId, message);
       } catch (Exception e) {
-        jdbc.update(
-            "update mail_send_attempts set status='UNKNOWN',error_code='SMTP_OUTCOME_UNCERTAIN',completed_at=now() where id=?",
-            attemptId);
+        if (!accepted) {
+          try {
+            jdbc.update(
+                "update mail_send_attempts set status='UNKNOWN',error_code='SMTP_OUTCOME_UNCERTAIN',completed_at=now() where id=? and tenant_id=? and status='SENDING'",
+                attemptId,
+                message.getTenantId());
+          } catch (Exception persistenceFailure) {
+            log.error("Could not record uncertain SMTP outcome for {}", id, persistenceFailure);
+          }
+        }
         log.warn(
-            "Outbound mail {} requires review after SMTP failure ({})",
+            "Outbound mail {} requires reconciliation after delivery ({})",
             id,
             e.getClass().getSimpleName());
-        jdbc.update(
-            "update outbound_messages set status='NEEDS_REVIEW',error_code='SMTP_OUTCOME_UNCERTAIN',updated_at=now() where id=? and status='SENDING'",
-            id);
+        try {
+          jdbc.update(
+              "update outbound_messages set status='NEEDS_REVIEW',error_code=?,updated_at=now() "
+                  + "where id=? and tenant_id=? and status='SENDING'",
+              accepted ? "ACCEPTED_PENDING_RECONCILIATION" : "SMTP_OUTCOME_UNCERTAIN",
+              id,
+              message.getTenantId());
+        } catch (Exception persistenceFailure) {
+          log.error("Could not mark outbound mail {} for review", id, persistenceFailure);
+        }
       }
     }
   }

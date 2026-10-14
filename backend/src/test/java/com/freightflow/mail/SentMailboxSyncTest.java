@@ -73,6 +73,86 @@ class SentMailboxSyncTest {
   }
 
   @Test
+  void lostAppendAcknowledgementFindsOlderCopyWhenSearchFailsAnd250NewerMessagesExist()
+      throws Exception {
+    Folder sent = mock(Folder.class);
+    Message original = mock(Message.class);
+    Message[] first = new Message[200];
+    first[0] = original;
+    for (int i = 1; i < first.length; i++) first[i] = mock(Message.class);
+    Message[] newer = new Message[51];
+    for (int i = 0; i < newer.length; i++) newer[i] = mock(Message.class);
+    when(sent.search(any(jakarta.mail.search.SearchTerm.class)))
+        .thenThrow(new jakarta.mail.MessagingException("SEARCH unsupported"));
+    when(sent.getMessageCount()).thenReturn(251);
+    when(sent.getMessages(1, 200)).thenReturn(first);
+    when(sent.getMessages(201, 251)).thenReturn(newer);
+    when(original.getHeader("Message-ID")).thenReturn(new String[] {"<accepted@example.test>"});
+
+    // The earlier APPEND succeeded; retry must detect it outside the newest 200 messages.
+    assertTrue(SentMailboxSync.containsMessageId(sent, "<accepted@example.test>"));
+    verify(sent).getMessages(1, 200);
+  }
+
+  @Test
+  void incompleteProviderScanCannotAuthorizeAnotherAppend() throws Exception {
+    Folder sent = mock(Folder.class);
+    when(sent.search(any(jakarta.mail.search.SearchTerm.class)))
+        .thenThrow(new jakarta.mail.MessagingException("SEARCH unavailable"));
+    when(sent.getMessageCount()).thenReturn(251);
+    when(sent.getMessages(1, 200))
+        .thenThrow(new jakarta.mail.MessagingException("Cannot inspect older headers"));
+    assertThrows(
+        jakarta.mail.MessagingException.class,
+        () -> SentMailboxSync.containsMessageId(sent, "<accepted@example.test>"));
+  }
+
+  @Test
+  void uncertainPreviousAppendNeverCreatesAnotherCopyWhenLookupFindsNoMatch() throws Exception {
+    server = new GreenMail(new ServerSetup(0, "127.0.0.1", "imap"));
+    server.start();
+    server.setUser("agent@example.test", "agent", "secret");
+    MailConnection connection = connection();
+    MailConnectionRepo repo = mock(MailConnectionRepo.class);
+    when(repo.findByIdAndTenantIdAndUserId(
+            connection.getId(), connection.getTenantId(), connection.getUserId()))
+        .thenReturn(Optional.of(connection));
+    MailTransportSupport transport = mock(MailTransportSupport.class);
+    Properties properties = new Properties();
+    properties.setProperty("mail.imap.host", "localhost");
+    properties.setProperty("mail.imap.port", Integer.toString(server.getImap().getPort()));
+    when(transport.session("imap", "localhost", server.getImap().getPort(), "STARTTLS"))
+        .thenReturn(Session.getInstance(properties));
+    Store store = Session.getInstance(properties).getStore("imap");
+    store.connect("localhost", server.getImap().getPort(), "agent", "secret");
+    assertTrue(store.getFolder("Sent").create(Folder.HOLDS_MESSAGES));
+    store.close();
+    var initial = copy(connection);
+    var retry =
+        new SentCopySyncWorker.Copy(
+            initial.messageId(),
+            initial.tenantId(),
+            initial.userId(),
+            initial.connectionId(),
+            initial.rfcMessageId(),
+            initial.mimeBytes(),
+            1);
+    var sync =
+        new SentMailboxSync(
+            repo,
+            new MailCredentialCipher(Base64.getEncoder().encodeToString(new byte[32])),
+            transport);
+    assertFalse(sync.sync(retry).complete());
+    store = Session.getInstance(properties).getStore("imap");
+    store.connect("localhost", server.getImap().getPort(), "agent", "secret");
+    Folder sent = store.getFolder("Sent");
+    sent.open(Folder.READ_ONLY);
+    assertEquals(0, sent.getMessageCount());
+    sent.close(false);
+    store.close();
+  }
+
+  @Test
   void discoversSpecialUseAndLocalizedSentFolders() throws Exception {
     IMAPFolder special = mock(IMAPFolder.class);
     when(special.getAttributes()).thenReturn(new String[] {"\\Sent"});

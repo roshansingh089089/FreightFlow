@@ -5,8 +5,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     allowedHosts: [
-  "hiv-backup-physical-tail.trycloudflare.com",
-  "breakfast-publishers-schools-backing.trycloudflare.com",
+  "tied-personnel-devon-programmer.trycloudflare.com",
+  "contemporary-spokesman-stuart-carter.trycloudflare.com",
 ],
     proxy: { '/api': 'http://localhost:8080' },
   },

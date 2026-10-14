@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  Clock3,
   FileText,
   Mail,
   Package,
@@ -27,6 +28,14 @@ import {
 } from 'react-router-dom';
 import { z } from 'zod';
 import {
+  CrmAskAiButton,
+  CrmDetailPanel,
+  CrmFacts,
+  CrmMetric,
+  desktopDetailInitiallyOpen,
+} from '../../shared/components/CrmListParts';
+import { FormSearchableSelect } from '../../shared/components/FormSearchableSelect';
+import {
   Empty,
   Heading,
   Pager,
@@ -40,6 +49,7 @@ import {
   ReferenceLocationPicker,
   type LocationOption,
 } from '../../shared/components/ReferenceLocationPicker';
+import { SearchableSelect } from '../../shared/components/SearchableSelect';
 import {
   CONTAINER_TYPES,
   defaultScopeDescriptions,
@@ -95,157 +105,382 @@ export function Enquiries() {
   const [status, setStatus] = useState('');
   const [mode, setMode] = useState('');
   const [from, setFrom] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(desktopDetailInitiallyOpen);
+  const [detailTab, setDetailTab] = useState('Overview');
   const q = useData(
     'enquiries',
     `/enquiries?page=${page}&search=${encodeURIComponent(search)}&status=${status}&mode=${mode}&from=${from}`,
   );
+  const total = useData('enquiry-count-total', '/enquiries?size=1');
+  const newCount = useData('enquiry-count-new', '/enquiries?status=NEW&size=1');
+  const pricingCount = useData(
+    'enquiry-count-pricing',
+    '/enquiries?status=PRICING_PENDING&size=1',
+  );
+  const quotedCount = useData(
+    'enquiry-count-quoted',
+    '/enquiries?status=QUOTED&size=1',
+  );
+  const draftCount = useData(
+    'enquiry-count-draft',
+    '/enquiries?status=DRAFT&size=1',
+  );
+  useEffect(() => {
+    if (!panelOpen || !q.data?.content?.length) return;
+    if (
+      !selectedId ||
+      !q.data.content.some((item: any) => item.id === selectedId)
+    )
+      setSelectedId(q.data.content[0].id);
+  }, [q.data, selectedId, panelOpen]);
+  const detail = useQuery({
+    queryKey: ['enquiry-list-detail', selectedId],
+    queryFn: () => api(`/enquiries/${selectedId}`),
+    enabled: panelOpen && !!selectedId,
+  });
+  const selected = detail.data?.enquiry;
   return (
-    <>
+    <div className="crm-suite crm-enquiries">
       <Heading
         title="Enquiries"
         subtitle="Track new freight requests from your customers."
         action={
-          <Link className="btn primary" to="/enquiries/new">
-            <Plus size={17} /> Create Enquiry
-          </Link>
+          <>
+            <CrmAskAiButton />
+            <Link className="btn primary" to="/enquiries/new">
+              <Plus size={17} /> Create Enquiry
+            </Link>
+          </>
         }
       />
-      <SectionCard
-        title="Freight enquiries"
-        action={
-          <span className="section-kicker">
-            {q.data?.totalElements ?? 0} TOTAL
-          </span>
-        }
+      <div className="crm-metrics">
+        <CrmMetric
+          label="Total enquiries"
+          value={total.data?.totalElements}
+          icon={ClipboardList}
+        />
+        <CrmMetric
+          label="New"
+          value={newCount.data?.totalElements}
+          icon={Plus}
+          tone="amber"
+        />
+        <CrmMetric
+          label="Pricing pending"
+          value={pricingCount.data?.totalElements}
+          icon={Clock3}
+          tone="violet"
+        />
+        <CrmMetric
+          label="Quoted"
+          value={quotedCount.data?.totalElements}
+          icon={Check}
+          tone="green"
+        />
+        <CrmMetric
+          label="Drafts"
+          value={draftCount.data?.totalElements}
+          icon={FileText}
+        />
+      </div>
+      <div
+        className={`crm-record-layout${panelOpen && selectedId ? '' : ' crm-panel-hidden'}`}
       >
-        <div className="filter-bar">
-          <label className="filter-search">
-            <Search size={17} />
+        <SectionCard
+          className="enquiries-directory"
+          title="Freight enquiries"
+          action={
+            <span className="section-kicker">
+              {q.data?.totalElements ?? 0} TOTAL
+            </span>
+          }
+        >
+          <div className="filter-bar enquiry-list-toolbar">
+            <label className="filter-search">
+              <Search size={17} />
+              <input
+                aria-label="Search enquiries"
+                placeholder="Search enquiry, customer or route"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
+              />
+            </label>
+            <SearchableSelect
+              ariaLabel="Transport mode"
+              value={mode}
+              onChange={(next) => {
+                setMode(next);
+                setPage(0);
+              }}
+              placeholder="All modes"
+              allowClear
+              options={['OCEAN', 'AIR', 'ROAD'].map((value) => ({
+                value,
+                label: titleCase(value),
+              }))}
+            />
+            <SearchableSelect
+              ariaLabel="Enquiry status"
+              value={status}
+              onChange={(next) => {
+                setStatus(next);
+                setPage(0);
+              }}
+              placeholder="All statuses"
+              allowClear
+              options={[
+                'DRAFT',
+                'NEW',
+                'PRICING_PENDING',
+                'QUOTED',
+                'CANCELLED',
+              ].map((value) => ({ value, label: titleCase(value) }))}
+            />
             <input
-              aria-label="Search enquiries"
-              placeholder="Search enquiry, customer or route"
-              value={search}
+              aria-label="Created from"
+              title="Created from"
+              type="date"
+              className="field"
+              value={from}
               onChange={(e) => {
-                setSearch(e.target.value);
+                setFrom(e.target.value);
                 setPage(0);
               }}
             />
-          </label>
-          <select
-            aria-label="Transport mode"
-            className="field"
-            value={mode}
-            onChange={(e) => {
-              setMode(e.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="">All modes</option>
-            {['OCEAN', 'AIR', 'ROAD'].map((x) => (
-              <option key={x} value={x}>
-                {titleCase(x)}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Enquiry status"
-            className="field"
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="">All statuses</option>
-            {['DRAFT', 'NEW', 'PRICING_PENDING', 'QUOTED', 'CANCELLED'].map(
-              (x) => (
-                <option key={x} value={x}>
-                  {titleCase(x)}
-                </option>
-              ),
+            {(search || mode || status || from) && (
+              <button
+                type="button"
+                className="enquiry-clear-filters"
+                onClick={() => {
+                  setSearch('');
+                  setMode('');
+                  setStatus('');
+                  setFrom('');
+                  setPage(0);
+                }}
+              >
+                Clear filters
+              </button>
             )}
-          </select>
-          <input
-            aria-label="Created from"
-            title="Created from"
-            type="date"
-            className="field"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              setPage(0);
-            }}
-          />
-        </div>
-        <State query={q}>
-          {q.data?.content?.length ? (
-            <>
-              <div className="table-wrap">
-                <Table className="table">
-                  <thead>
-                    <tr>
-                      {[
-                        'Enquiry ID',
-                        'Customer',
-                        'Mode',
-                        'Route',
-                        'Cargo',
-                        'Status',
-                        'Created',
-                      ].map((x) => (
-                        <th key={x}>{x}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {q.data.content.map((e: any) => (
-                      <tr key={e.id}>
-                        <td>
-                          <Link
-                            className="table-primary"
-                            to={'/enquiries/' + e.id}
-                          >
-                            {e.enquiryCode}
-                          </Link>
-                        </td>
-                        <td>{e.customerName}</td>
-                        <td>
-                          <span className="mode-cell">
-                            <Ship size={15} />
-                            {titleCase(e.mode)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="route-text">
-                            {e.origin} <ArrowRight size={13} /> {e.destination}
-                          </span>
-                        </td>
-                        <td>{e.commodity}</td>
-                        <td>
-                          <StatusBadge value={e.status} />
-                        </td>
-                        <td>{date(e.createdAt)}</td>
+          </div>
+          <State query={q}>
+            {q.data?.content?.length ? (
+              <>
+                <div className="table-wrap">
+                  <Table className="table enquiry-list-table">
+                    <thead>
+                      <tr>
+                        {[
+                          'Enquiry ID',
+                          'Customer',
+                          'Mode',
+                          'Route',
+                          'Cargo',
+                          'Status',
+                          'Created',
+                        ].map((x) => (
+                          <th key={x}>{x}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
-              <Pager data={q.data} page={page} setPage={setPage} />
-            </>
-          ) : (
-            <Empty
-              text="No enquiries yet"
-              description="Create your first freight enquiry to get started."
-              action={
-                <Link className="btn primary" to="/enquiries/new">
-                  Create Enquiry
+                    </thead>
+                    <tbody>
+                      {q.data.content.map((e: any) => (
+                        <tr
+                          key={e.id}
+                          className={
+                            panelOpen && selectedId === e.id
+                              ? 'crm-selected'
+                              : ''
+                          }
+                          aria-selected={panelOpen && selectedId === e.id}
+                          tabIndex={0}
+                          onClick={() => {
+                            setSelectedId(e.id);
+                            setPanelOpen(true);
+                            setDetailTab('Overview');
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setSelectedId(e.id);
+                              setPanelOpen(true);
+                            }
+                          }}
+                        >
+                          <td data-label="Enquiry ID">
+                            <Link
+                              className="table-primary"
+                              to={'/enquiries/' + e.id}
+                            >
+                              {e.enquiryCode}
+                            </Link>
+                          </td>
+                          <td data-label="Customer">
+                            <span
+                              className="list-cell-clamp"
+                              title={e.customerName}
+                              tabIndex={0}
+                            >
+                              {e.customerName}
+                            </span>
+                          </td>
+                          <td data-label="Mode">
+                            <span className="mode-cell">
+                              <Ship size={15} />
+                              {titleCase(e.mode)}
+                            </span>
+                          </td>
+                          <td data-label="Route">
+                            <span
+                              className="route-text"
+                              title={`${e.origin} → ${e.destination}`}
+                              tabIndex={0}
+                            >
+                              {e.origin} <ArrowRight size={13} />{' '}
+                              {e.destination}
+                            </span>
+                          </td>
+                          <td data-label="Cargo">
+                            <span
+                              className="list-cell-clamp two-lines"
+                              title={e.commodity}
+                              tabIndex={0}
+                            >
+                              {e.commodity}
+                            </span>
+                          </td>
+                          <td data-label="Status">
+                            <StatusBadge value={e.status} />
+                          </td>
+                          <td data-label="Created">{date(e.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+                <Pager data={q.data} page={page} setPage={setPage} />
+              </>
+            ) : (
+              <Empty
+                text={
+                  search || mode || status || from
+                    ? 'No matching enquiries'
+                    : 'No enquiries yet'
+                }
+                description={
+                  search || mode || status || from
+                    ? 'Try changing or clearing the filters.'
+                    : 'Create your first freight enquiry to get started.'
+                }
+                action={
+                  <Link className="btn primary" to="/enquiries/new">
+                    Create Enquiry
+                  </Link>
+                }
+              />
+            )}
+          </State>
+        </SectionCard>
+        {panelOpen && selectedId && (
+          <CrmDetailPanel
+            title={
+              detail.data?.enquiryCode ||
+              q.data?.content?.find((item: any) => item.id === selectedId)
+                ?.enquiryCode ||
+              'Enquiry'
+            }
+            subtitle={detail.data?.customerName}
+            badge={
+              detail.data?.status && <StatusBadge value={detail.data.status} />
+            }
+            tabs={['Overview', 'Cargo', 'Source']}
+            activeTab={detailTab}
+            onTab={setDetailTab}
+            onClose={() => setPanelOpen(false)}
+            actions={
+              <>
+                <Link
+                  className="btn secondary"
+                  to={`/enquiries/${selectedId}/edit`}
+                >
+                  Edit enquiry
                 </Link>
-              }
-            />
-          )}
-        </State>
-      </SectionCard>
-    </>
+                <Link
+                  className="btn primary"
+                  to={`/enquiries/${selectedId}/quotations/new`}
+                >
+                  Create quotation
+                </Link>
+              </>
+            }
+          >
+            {detail.isLoading ? (
+              <p>Loading enquiry…</p>
+            ) : detail.isError ? (
+              <p role="alert">Could not load enquiry details.</p>
+            ) : detailTab === 'Overview' ? (
+              <>
+                <h3>Shipment information</h3>
+                <CrmFacts
+                  items={[
+                    { label: 'Customer', value: detail.data?.customerName },
+                    { label: 'Mode', value: selected?.mode },
+                    {
+                      label: 'Route',
+                      value:
+                        selected?.origin && selected?.destination
+                          ? `${selected.origin} → ${selected.destination}`
+                          : '—',
+                    },
+                    { label: 'Status', value: detail.data?.status },
+                    { label: 'Created', value: date(detail.data?.createdAt) },
+                  ]}
+                />
+              </>
+            ) : detailTab === 'Cargo' ? (
+              <>
+                <h3>Cargo details</h3>
+                <CrmFacts
+                  items={[
+                    { label: 'Commodity', value: selected?.commodity },
+                    { label: 'Cargo type', value: selected?.cargoType },
+                    {
+                      label: 'Container',
+                      value:
+                        selected?.containerQuantity && selected?.containerType
+                          ? `${selected.containerQuantity} × ${selected.containerType}`
+                          : '—',
+                    },
+                    {
+                      label: 'Gross weight',
+                      value: selected?.grossWeight
+                        ? `${selected.grossWeight} ${selected.weightUnit || ''}`
+                        : '—',
+                    },
+                    {
+                      label: 'Ready date',
+                      value: selected?.readyDate
+                        ? date(selected.readyDate)
+                        : '—',
+                    },
+                  ]}
+                />
+              </>
+            ) : selected?.sourceThreadId ? (
+              <Link to={`/mail/threads/${selected.sourceThreadId}`}>
+                View source conversation
+              </Link>
+            ) : (
+              <p>No source conversation linked.</p>
+            )}
+          </CrmDetailPanel>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -557,7 +792,7 @@ export function EnquiryForm() {
       const first = formRef.current?.querySelector<HTMLElement>(
         '[aria-invalid="true"]',
       );
-      first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      first?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       first?.focus({ preventScroll: true });
     });
   const persist = (status: 'NEW' | 'DRAFT') =>
@@ -1128,72 +1363,43 @@ export function EnquiryForm() {
                 <UserRound size={17} /> Customer &amp; Contact
               </h2>
               <div className="freight-field-grid freight-field-grid-customer">
-                <label className="block">
-                  <span className="label">Customer *</span>
-                  <select
-                    className={
-                      'field' + (customerError ? ' enquiry-invalid' : '')
-                    }
-                    aria-invalid={!!customerError}
-                    aria-describedby={
-                      customerError ? 'enquiry-customerId-error' : undefined
-                    }
-                    {...form.register('customerId', {
-                      required: 'Select a customer',
-                      onChange: () => {
-                        form.setValue('contactId', '');
-                        if (!form.getFieldState('contactEmail').isDirty)
-                          form.setValue('contactEmail', '');
-                      },
-                    })}
-                  >
-                    <option value="">Select customer</option>
-                    {customers.data?.content?.map((c: any) => (
-                      <option value={c.id} key={c.id}>
-                        {c.companyName}
-                      </option>
-                    ))}
-                  </select>
-                  {customerError && (
-                    <small
-                      id="enquiry-customerId-error"
-                      className="enquiry-field-error"
-                      role="alert"
-                    >
-                      {String(customerError)}
-                    </small>
+                <FormSearchableSelect
+                  form={form}
+                  name="customerId"
+                  label="Customer"
+                  required
+                  placeholder="Select customer"
+                  loading={customers.isLoading}
+                  options={(customers.data?.content || []).map((c: any) => ({
+                    value: c.id,
+                    label: c.companyName,
+                  }))}
+                  onChange={() => {
+                    form.setValue('contactId', '');
+                    if (!form.getFieldState('contactEmail').isDirty)
+                      form.setValue('contactEmail', '');
+                  }}
+                />
+                <FormSearchableSelect
+                  form={form}
+                  name="contactId"
+                  label="Contact person"
+                  placeholder="Select contact"
+                  disabled={!selectedCustomer}
+                  loading={customerDetail.isLoading}
+                  options={(customerDetail.data?.contacts || []).map(
+                    (c: any) => ({ value: c.id, label: c.name }),
                   )}
-                </label>
-                <label className="block">
-                  <span className="label">Contact person</span>
-                  <select
-                    className="field"
-                    disabled={!selectedCustomer}
-                    {...form.register('contactId', {
-                      onChange: (
-                        event: React.ChangeEvent<HTMLSelectElement>,
-                      ) => {
-                        const contact = customerDetail.data?.contacts?.find(
-                          (item: any) => item.id === event.target.value,
-                        );
-                        if (
-                          contact &&
-                          !form.getFieldState('contactEmail').isDirty
-                        )
-                          form.setValue('contactEmail', contact.email || '', {
-                            shouldValidate: true,
-                          });
-                      },
-                    })}
-                  >
-                    <option value="">Select contact</option>
-                    {customerDetail.data?.contacts?.map((c: any) => (
-                      <option value={c.id} key={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  onChange={(next) => {
+                    const contact = customerDetail.data?.contacts?.find(
+                      (item: any) => item.id === next,
+                    );
+                    if (contact && !form.getFieldState('contactEmail').isDirty)
+                      form.setValue('contactEmail', contact.email || '', {
+                        shouldValidate: true,
+                      });
+                  }}
+                />
                 <EnquiryField
                   form={form}
                   name="contactEmail"
@@ -1216,42 +1422,36 @@ export function EnquiryForm() {
                 <Ship size={17} /> Route &amp; Schedule
               </h2>
               <div className="freight-field-grid freight-field-grid-uniform">
-                <label>
-                  <span className="label">Mode *</span>
-                  <select
-                    className={'field' + (modeError ? ' enquiry-invalid' : '')}
-                    aria-invalid={!!modeError}
-                    aria-describedby={
-                      modeError ? 'enquiry-mode-error' : undefined
-                    }
-                    {...form.register('mode', {
-                      required: 'Select a mode',
-                      onChange: (event: any) => {
-                        const nextMode = event.target.value;
-                        form.setValue('cargoType', '');
-                        form.setValue('polCode', '');
-                        form.setValue('podCode', '');
-                        if (nextMode !== 'OCEAN')
-                          form.unregister([
-                            'portOfLoading',
-                            'portOfDischarge',
-                            'containerType',
-                            'containerQuantity',
-                          ]);
-                        if (nextMode === 'AIR') form.unregister('cargoType');
-                        if (nextMode !== 'AIR')
-                          form.unregister([
-                            'airportOfOrigin',
-                            'airportOfDestination',
-                          ]);
-                      },
-                    })}
-                  >
-                    <option value="">Select mode</option>
-                    {['OCEAN', 'AIR', 'ROAD'].map((x) => (
-                      <option key={x}>{x}</option>
-                    ))}
-                  </select>
+                <div>
+                  <FormSearchableSelect
+                    form={form}
+                    name="mode"
+                    label="Mode"
+                    required
+                    placeholder="Select mode"
+                    options={['OCEAN', 'AIR', 'ROAD'].map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                    onChange={(nextMode) => {
+                      form.setValue('cargoType', '');
+                      form.setValue('polCode', '');
+                      form.setValue('podCode', '');
+                      if (nextMode !== 'OCEAN')
+                        form.unregister([
+                          'portOfLoading',
+                          'portOfDischarge',
+                          'containerType',
+                          'containerQuantity',
+                        ]);
+                      if (nextMode === 'AIR') form.unregister('cargoType');
+                      if (nextMode !== 'AIR')
+                        form.unregister([
+                          'airportOfOrigin',
+                          'airportOfDestination',
+                        ]);
+                    }}
+                  />
                   {modeError && (
                     <small
                       id="enquiry-mode-error"
@@ -1261,7 +1461,7 @@ export function EnquiryForm() {
                       {String(modeError)}
                     </small>
                   )}
-                </label>
+                </div>
                 {mode === 'OCEAN' ? (
                   <>
                     <LocationField
@@ -1332,17 +1532,13 @@ export function EnquiryForm() {
                   label="Cargo-ready date"
                   type="date"
                 />
-                <label>
-                  <span className="label">Incoterm</span>
-                  <select className="field" {...form.register('incoterm')}>
-                    <option value="">Select Incoterm</option>
-                    {INCOTERMS.map((term) => (
-                      <option key={term} value={term}>
-                        {term}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <FormSearchableSelect
+                  form={form}
+                  name="incoterm"
+                  label="Incoterm"
+                  placeholder="Select Incoterm"
+                  options={INCOTERMS.map((value) => ({ value, label: value }))}
+                />
               </div>
               {!!routeReviewFields.length && (
                 <div className="freight-route-review" role="status">
@@ -1369,37 +1565,34 @@ export function EnquiryForm() {
               </h2>
               <div className="freight-field-grid freight-field-grid-uniform">
                 {mode === 'OCEAN' && (
-                  <label>
-                    <span className="label">Shipment type</span>
-                    <select
-                      className="field"
-                      {...form.register('cargoType', {
-                        onChange: (
-                          event: React.ChangeEvent<HTMLSelectElement>,
-                        ) => {
-                          if (event.target.value !== 'FCL')
-                            form.unregister([
-                              'containerType',
-                              'containerQuantity',
-                            ]);
-                        },
-                      })}
-                    >
-                      <option value="">Not specified</option>
-                      <option>FCL</option>
-                      <option>LCL</option>
-                    </select>
-                  </label>
+                  <FormSearchableSelect
+                    form={form}
+                    name="cargoType"
+                    label="Shipment type"
+                    placeholder="Not specified"
+                    allowClear
+                    options={['FCL', 'LCL'].map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                    onChange={(value) => {
+                      if (value !== 'FCL')
+                        form.unregister(['containerType', 'containerQuantity']);
+                    }}
+                  />
                 )}
                 {mode === 'ROAD' && (
-                  <label>
-                    <span className="label">Truck load</span>
-                    <select className="field" {...form.register('cargoType')}>
-                      <option value="">Not specified</option>
-                      <option value="FTL">FTL</option>
-                      <option value="LTL">LTL</option>
-                    </select>
-                  </label>
+                  <FormSearchableSelect
+                    form={form}
+                    name="cargoType"
+                    label="Truck load"
+                    placeholder="Not specified"
+                    allowClear
+                    options={['FTL', 'LTL'].map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                  />
                 )}
                 <EnquiryField
                   form={form}
@@ -1414,29 +1607,34 @@ export function EnquiryForm() {
                   label="Gross Weight"
                   type="number"
                 />
-                <label>
-                  <span className="label">Weight unit</span>
-                  <select className="field" {...form.register('weightUnit')}>
-                    <option value="">Not specified</option>
-                    <option>KG</option>
-                    <option>LB</option>
-                    <option>TON</option>
-                  </select>
-                </label>
+                <FormSearchableSelect
+                  form={form}
+                  name="weightUnit"
+                  label="Weight unit"
+                  placeholder="Not specified"
+                  allowClear
+                  options={['KG', 'LB', 'TON'].map((value) => ({
+                    value,
+                    label: value,
+                  }))}
+                />
                 <EnquiryField
                   form={form}
                   name="volume"
                   label="Volume"
                   type="number"
                 />
-                <label>
-                  <span className="label">Volume unit</span>
-                  <select className="field" {...form.register('volumeUnit')}>
-                    <option value="">Not specified</option>
-                    <option>CBM</option>
-                    <option>CFT</option>
-                  </select>
-                </label>
+                <FormSearchableSelect
+                  form={form}
+                  name="volumeUnit"
+                  label="Volume unit"
+                  placeholder="Not specified"
+                  allowClear
+                  options={['CBM', 'CFT'].map((value) => ({
+                    value,
+                    label: value,
+                  }))}
+                />
                 <EnquiryField
                   form={form}
                   name="packageCount"
@@ -1445,20 +1643,16 @@ export function EnquiryForm() {
                 />
                 {mode === 'OCEAN' && cargoType === 'FCL' && (
                   <>
-                    <label>
-                      <span className="label">Container Type</span>
-                      <select
-                        className="field"
-                        {...form.register('containerType')}
-                      >
-                        <option value="">Select container</option>
-                        {CONTAINER_TYPES.map((container) => (
-                          <option key={container} value={container}>
-                            {container}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <FormSearchableSelect
+                      form={form}
+                      name="containerType"
+                      label="Container Type"
+                      placeholder="Select container"
+                      options={CONTAINER_TYPES.map((value) => ({
+                        value,
+                        label: value,
+                      }))}
+                    />
                     <EnquiryField
                       form={form}
                       name="containerQuantity"
@@ -1569,16 +1763,17 @@ export function EnquiryForm() {
                   </label>
                 )}
               <div className="freight-currency-row">
-                <label className="freight-currency-field">
-                  <span className="label">Quote currency</span>
-                  <select className="field" {...form.register('quoteCurrency')}>
-                    {QUOTE_CURRENCIES.map((currency) => (
-                      <option key={currency} value={currency}>
-                        {currency}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="freight-currency-field">
+                  <FormSearchableSelect
+                    form={form}
+                    name="quoteCurrency"
+                    label="Quote currency"
+                    options={QUOTE_CURRENCIES.map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                  />
+                </div>
                 <p className="freight-currency-note">
                   When you create a quotation, included charges are converted
                   into {liveValues.quoteCurrency || 'USD'} using the available

@@ -65,6 +65,28 @@ function renderShell() {
 }
 
 describe('shared workspace shell', () => {
+  it('renders one functional global header across routes', async () => {
+    renderShell();
+    await screen.findByLabelText('Draft note');
+    const header = document.querySelector('.app-global-header');
+    expect(document.querySelectorAll('.app-global-header')).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'Screen layout' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'AI Assist' }));
+    expect(screen.getByText('AI drawer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    expect(
+      screen.getByText('No recent notifications in this session.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByLabelText('Search workspace')).toBeTruthy();
+    fireEvent.click(screen.getByRole('link', { name: 'Quotations' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Quotation list' }),
+    ).toBeTruthy();
+    expect(document.querySelectorAll('.app-global-header')).toHaveLength(1);
+    expect(document.querySelector('.app-global-header')).toBe(header);
+  });
+
   it('keeps an in-progress page mounted across layout modes', async () => {
     renderShell();
     const note = await screen.findByLabelText('Draft note');
@@ -75,10 +97,23 @@ describe('shared workspace shell', () => {
         { name: 'Mail' },
       ),
     );
+    expect(document.querySelector('.app-shell-mail-mode')).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: 'Sales Tracker' }).getAttribute('title'),
+    ).toBe('Sales Tracker');
     expect(
       document.querySelector('.app-platform-pane')?.hasAttribute('hidden'),
     ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Side by side' }));
+    expect(document.querySelector('.app-shell-mail-mode')).toBeNull();
+    expect(document.querySelector('.app-shell-mail-layout')).toBeTruthy();
+    expect(
+      document.querySelector('.app-panes-split.ff-mail-split'),
+    ).toBeTruthy();
+    expect(document.querySelector('.app-mail-pane.ff-mail-pane')).toBeTruthy();
+    expect(
+      document.querySelector('.app-platform-pane.ff-platform-pane'),
+    ).toBeTruthy();
     expect(screen.getByLabelText('Draft note')).toBe(note);
     expect((note as HTMLInputElement).value).toBe('Unsaved customer notes');
     fireEvent.click(

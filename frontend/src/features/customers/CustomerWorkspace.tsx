@@ -1,8 +1,8 @@
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
-  Mail,
-  PanelLeft,
+  Building2,
+  FileText,
   Plus,
   Search,
   Sparkles,
@@ -12,6 +12,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../api';
 import { useWorkspaceLayout } from '../../app/layouts/WorkspaceLayout';
+import { CountryFlag } from '../../shared/components/CountryFlag';
+import {
+  CrmDetailPanel,
+  CrmFacts,
+  CrmMetric,
+  desktopDetailInitiallyOpen,
+} from '../../shared/components/CrmListParts';
+import { StatusBadge } from '../../shared/components/PageElements';
+import { SearchableSelect } from '../../shared/components/SearchableSelect';
 import CustomerMailWorkspace, {
   type MailDetail,
   type MailItem,
@@ -31,6 +40,8 @@ type Customer = {
   customerType: string;
   country: string;
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
   primaryContact?: { name: string; email: string; phone: string };
 };
 type Page = { content: Customer[]; totalElements: number; totalPages: number };
@@ -113,6 +124,26 @@ export default function CustomerWorkspace({
   const [type, setType] = useState('');
   const [country, setCountry] = useState('');
   const [status, setStatus] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    null,
+  );
+  const [customerPanelOpen, setCustomerPanelOpen] = useState(
+    desktopDetailInitiallyOpen,
+  );
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (mode !== 'customers' || !workspaceRef.current || typeof ResizeObserver === 'undefined') return;
+    let wasNarrow = false;
+    const observer = new ResizeObserver(([entry]) => {
+      const isNarrow = entry.contentRect.width <= 1120;
+      if (isNarrow && !wasNarrow) setCustomerPanelOpen(false);
+      wasNarrow = isNarrow;
+    });
+    observer.observe(workspaceRef.current);
+    return () => observer.disconnect();
+  }, [mode]);
+  const [customerTab, setCustomerTab] = useState('Overview');
+  const [aiPromptOpen, setAiPromptOpen] = useState(false);
   const [aiQuestion, setAiQuestion] = useState('');
   const aiQuestionRef = useRef<HTMLInputElement>(null);
   const [aiResults, setAiResults] = useState<{
@@ -122,10 +153,17 @@ export default function CustomerWorkspace({
   const [aiWorking, setAiWorking] = useState(false);
   const [aiError, setAiError] = useState('');
   const [selectedMailId, setSelectedMailId] = useState<string | null>(null);
-  const [mailSearchParams] = useSearchParams();
+  const [mailSearchParams, setMailSearchParams] = useSearchParams();
   const requestedMessageId =
     mailSearchParams.get('messageId') ||
     mailSearchParams.get('sourceMessageId');
+  const selectMail = (id: string | null) => {
+    setSelectedMailId(id);
+    const next = new URLSearchParams(mailSearchParams);
+    if (id) next.set('messageId', id);
+    else next.delete('messageId');
+    setMailSearchParams(next, { replace: true });
+  };
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [syncSummary, setSyncSummary] = useState('');
@@ -171,6 +209,54 @@ export default function CustomerWorkspace({
       ) as Promise<Page>,
     enabled: !embeddedMail,
   });
+  const totalCustomers = useQuery({
+    queryKey: ['customers', 'count', 'all'],
+    queryFn: () => request('/customers?size=1') as Promise<Page>,
+    enabled: mode === 'customers',
+  });
+  const activeCustomers = useQuery({
+    queryKey: ['customers', 'count', 'ACTIVE'],
+    queryFn: () => request('/customers?status=ACTIVE&size=1') as Promise<Page>,
+    enabled: mode === 'customers',
+  });
+  const inactiveCustomers = useQuery({
+    queryKey: ['customers', 'count', 'INACTIVE'],
+    queryFn: () =>
+      request('/customers?status=INACTIVE&size=1') as Promise<Page>,
+    enabled: mode === 'customers',
+  });
+  const quotationCount = useQuery({
+    queryKey: ['quotations', 'count'],
+    queryFn: () => request('/quotations?size=1') as Promise<Page>,
+    enabled: mode === 'customers',
+  });
+  const countries = useQuery<{ code: string; name: string }[]>({
+    queryKey: ['reference-countries'],
+    queryFn: () => request('/reference/countries'),
+    enabled: mode === 'customers',
+    staleTime: 86_400_000,
+  });
+  useEffect(() => {
+    if (!customerPanelOpen || !directory.data?.content?.length) return;
+    if (
+      !selectedCustomerId ||
+      !directory.data.content.some(
+        (customer) => customer.id === selectedCustomerId,
+      )
+    )
+      setSelectedCustomerId(directory.data.content[0].id);
+  }, [directory.data, selectedCustomerId, customerPanelOpen]);
+  const selectedCustomer = useQuery({
+    queryKey: ['customer', selectedCustomerId],
+    queryFn: () => request(`/customers/${selectedCustomerId}`),
+    enabled: mode === 'customers' && customerPanelOpen && !!selectedCustomerId,
+  });
+  const countryCode = (name: string) =>
+    countries.data?.find(
+      (item) =>
+        item.code?.toUpperCase() === name?.toUpperCase() ||
+        item.name?.toLowerCase() === name?.toLowerCase(),
+    )?.code;
   const mailMatches = usePossibleCustomers([
     mailDetail.data?.fromEmail || '',
     mailDetail.data?.fromName || '',
@@ -245,20 +331,24 @@ export default function CustomerWorkspace({
     }
   };
   return (
-    <div className="customer-workspace">
+    <div
+      ref={workspaceRef}
+      className={`customer-workspace${mode === 'customers' ? ' crm-suite crm-customers' : ''}${customerPanelOpen ? '' : ' crm-panel-hidden'}`}
+    >
       {mode === 'customers' && (
         <div className="cw-heading">
           <div>
-            <span className="cw-eyebrow">CUSTOMERS</span>
             <h1>Customers</h1>
-            <p>
-              {directory.data?.totalElements?.toLocaleString() ?? '—'} customers
-              in your workspace
-            </p>
+            <p>Manage your customers, contacts and business relationships.</p>
           </div>
           <div className="cw-heading-actions">
-            <button className="btn secondary" onClick={() => setMode('split')}>
-              <PanelLeft size={16} /> Side by side
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setAiPromptOpen((open) => !open)}
+              aria-expanded={aiPromptOpen}
+            >
+              <Sparkles size={16} /> Ask AI
             </button>
             <Link className="btn primary" to="/customers/new">
               <Plus size={16} /> Onboard customer
@@ -267,6 +357,33 @@ export default function CustomerWorkspace({
         </div>
       )}
       {mode === 'customers' && (
+        <div className="crm-metrics">
+          <CrmMetric
+            label="Total customers"
+            value={totalCustomers.data?.totalElements}
+            icon={Users}
+          />
+          <CrmMetric
+            label="Active customers"
+            value={activeCustomers.data?.totalElements}
+            icon={Building2}
+            tone="green"
+          />
+          <CrmMetric
+            label="Inactive customers"
+            value={inactiveCustomers.data?.totalElements}
+            icon={Users}
+            tone="amber"
+          />
+          <CrmMetric
+            label="Total quotations"
+            value={quotationCount.data?.totalElements}
+            icon={FileText}
+            tone="violet"
+          />
+        </div>
+      )}
+      {mode === 'customers' && aiPromptOpen && (
         <div className="cw-ai-search">
           <Sparkles size={18} />
           <input
@@ -309,19 +426,13 @@ export default function CustomerWorkspace({
         </div>
       )}
       <div
-        className={`cw-layout cw-${mode}${selectedMailId ? ' has-mail-selection' : ' no-mail-selection'}`}
+        className={`cw-layout cw-${mode}${mode === 'split' ? ' ff-mail-split' : ''}${selectedMailId ? ' has-mail-selection' : ' no-mail-selection'}`}
       >
-        {mode === 'customers' ? (
-          <button
-            className="cw-rail"
-            onClick={() => setMode('split')}
-            aria-label="Show mail and customers side by side"
-            title="Show side by side"
+        {mode === 'customers' ? null : (
+          <section
+            className="cw-mail-shell ff-mail-pane"
+            aria-label="Mail workspace"
           >
-            <Mail size={19} />
-          </button>
-        ) : (
-          <section className="cw-mail-shell" aria-label="Mail workspace">
             <CustomerMailWorkspace
               mode={mailMode}
               compact={mailMode === 'split'}
@@ -329,7 +440,7 @@ export default function CustomerWorkspace({
               inboxUnreadCount={mailCounts.data?.unread}
               inboxTotalCount={mailCounts.data?.inbox}
               selectedId={selectedMailId}
-              onSelect={setSelectedMailId}
+              onSelect={selectMail}
               detail={activeConnectionId ? mailDetail.data : undefined}
               detailLoading={mailDetail.isLoading}
               detailError={mailDetail.error?.message}
@@ -378,7 +489,7 @@ export default function CustomerWorkspace({
         )}
         {mode === 'mail' ? null : (
           <section
-            className="cw-pane cw-directory"
+            className="cw-pane cw-directory ff-platform-pane"
             aria-label="Customer directory"
           >
             <div className="cw-pane-head">
@@ -409,21 +520,20 @@ export default function CustomerWorkspace({
                 />
               </label>
               <div className="cw-filters">
-                <select
-                  aria-label="Customer type"
+                <SearchableSelect
+                  ariaLabel="Customer type"
                   value={type}
-                  onChange={(event) => {
-                    setType(event.target.value);
+                  onChange={(next) => {
+                    setType(next);
                     setPage(0);
                   }}
-                >
-                  <option value="">All types</option>
-                  {types.map((value) => (
-                    <option key={value} value={value}>
-                      {value.replaceAll('_', ' ')}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="All types"
+                  allowClear
+                  options={types.map((value) => ({
+                    value,
+                    label: value.replaceAll('_', ' '),
+                  }))}
+                />
                 <input
                   aria-label="Country"
                   value={country}
@@ -433,26 +543,57 @@ export default function CustomerWorkspace({
                   }}
                   placeholder="Country"
                 />
-                <select
-                  aria-label="Customer status"
+                <SearchableSelect
+                  ariaLabel="Customer status"
                   value={status}
-                  onChange={(event) => {
-                    setStatus(event.target.value);
+                  onChange={(next) => {
+                    setStatus(next);
                     setPage(0);
                   }}
-                >
-                  <option value="">All statuses</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                </select>
+                  placeholder="All statuses"
+                  allowClear
+                  options={[
+                    { value: 'ACTIVE', label: 'Active' },
+                    { value: 'INACTIVE', label: 'Inactive' },
+                  ]}
+                />
               </div>
+              {mode === 'customers' &&
+                (search || type || country || status) && (
+                  <button
+                    type="button"
+                    className="crm-clear"
+                    onClick={() => {
+                      setSearch('');
+                      setType('');
+                      setCountry('');
+                      setStatus('');
+                      setPage(0);
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
             </div>
             <div className="cw-list-head">
-              <span>COMPANY</span>
-              <span>PRIMARY CONTACT</span>
-              {mode === 'customers' && <span>TYPE / COUNTRY</span>}
-              <span>STATUS</span>
-              <span />
+              {mode === 'customers' ? (
+                <>
+                  <span>CUSTOMER</span>
+                  <span>TYPE</span>
+                  <span>COUNTRY</span>
+                  <span>PRIMARY CONTACT</span>
+                  <span>STATUS</span>
+                  <span>CREATED</span>
+                  <span />
+                </>
+              ) : (
+                <>
+                  <span>COMPANY</span>
+                  <span>PRIMARY CONTACT</span>
+                  <span>STATUS</span>
+                  <span />
+                </>
+              )}
             </div>
             {directory.isLoading ? (
               <div className="cw-list-state">Loading customers…</div>
@@ -462,7 +603,19 @@ export default function CustomerWorkspace({
               </div>
             ) : directory.data?.content.length ? (
               directory.data.content.map((customer) => (
-                <div className="cw-customer-row" key={customer.id}>
+                <div
+                  className={`cw-customer-row${mode === 'customers' && customerPanelOpen && selectedCustomerId === customer.id ? ' selected' : ''}`}
+                  key={customer.id}
+                  onClick={
+                    mode === 'customers'
+                      ? () => {
+                          setSelectedCustomerId(customer.id);
+                          setCustomerPanelOpen(true);
+                          setCustomerTab('Overview');
+                        }
+                      : undefined
+                  }
+                >
                   <div className="cw-company">
                     <span className="cw-avatar">
                       {customer.companyName
@@ -473,38 +626,72 @@ export default function CustomerWorkspace({
                         .toUpperCase()}
                     </span>
                     <span>
-                      <Link to={`/customers/${customer.id}`}>
+                      <Link to={`/customers/${customer.id}`} onClick={(event) => event.stopPropagation()}>
                         {customer.companyName}
                       </Link>
                       <small>{customer.customerCode}</small>
                     </span>
                   </div>
+                  {mode === 'customers' && (
+                    <div className="cw-type">
+                      <strong>
+                        {customer.customerType?.replaceAll('_', ' ') || '—'}
+                      </strong>
+                    </div>
+                  )}
+                  {mode === 'customers' && (
+                    <div className="cw-country">
+                      <CountryFlag
+                        code={countryCode(customer.country)}
+                        name={customer.country}
+                      />
+                      <span>{customer.country || '—'}</span>
+                    </div>
+                  )}
                   <div className="cw-contact">
                     <strong>{customer.primaryContact?.name || '—'}</strong>
                     <small>
                       {customer.primaryContact?.email || 'No email'}
                     </small>
                   </div>
-                  {mode === 'customers' && (
-                    <div className="cw-type">
-                      <strong>
-                        {customer.customerType?.replaceAll('_', ' ')}
-                      </strong>
-                      <small>{customer.country}</small>
-                    </div>
-                  )}
                   <span
                     className={`cw-status ${customer.status === 'ACTIVE' ? 'is-active' : ''}`}
                   >
                     {customer.status}
                   </span>
-                  <Link
-                    className="cw-row-action"
-                    to={`/customers/${customer.id}`}
-                    aria-label={`View ${customer.companyName}`}
-                  >
-                    <ArrowRight size={16} />
-                  </Link>
+                  {mode === 'customers' && (
+                    <span className="cw-row-date">
+                      {customer.createdAt
+                        ? new Date(customer.createdAt).toLocaleDateString(
+                            'en-GB',
+                            { day: 'numeric', month: 'short', year: 'numeric' },
+                          )
+                        : '—'}
+                    </span>
+                  )}
+                  {mode === 'customers' ? (
+                    <button
+                      type="button"
+                      className="cw-row-action"
+                      aria-label={`Show ${customer.companyName} details`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedCustomerId(customer.id);
+                        setCustomerPanelOpen(true);
+                        setCustomerTab('Overview');
+                      }}
+                    >
+                      <ArrowRight size={16} />
+                    </button>
+                  ) : (
+                    <Link
+                      className="cw-row-action"
+                      to={`/customers/${customer.id}`}
+                      aria-label={`View ${customer.companyName}`}
+                    >
+                      <ArrowRight size={16} />
+                    </Link>
+                  )}
                 </div>
               ))
             ) : (
@@ -535,6 +722,111 @@ export default function CustomerWorkspace({
               </div>
             )}
           </section>
+        )}
+        {mode === 'customers' && customerPanelOpen && selectedCustomerId && (
+          <>
+          <button type="button" className="crm-customer-scrim" aria-label="Close customer details" onClick={() => setCustomerPanelOpen(false)} />
+          <CrmDetailPanel
+            title={
+              selectedCustomer.data?.companyName ||
+              directory.data?.content.find(
+                (customer) => customer.id === selectedCustomerId,
+              )?.companyName ||
+              'Customer'
+            }
+            subtitle={selectedCustomer.data?.customerCode}
+            badge={
+              selectedCustomer.data?.status && (
+                <StatusBadge value={selectedCustomer.data.status} />
+              )
+            }
+            tabs={['Overview', 'Contacts', 'Quotations', 'Enquiries']}
+            activeTab={customerTab}
+            onTab={setCustomerTab}
+            onClose={() => setCustomerPanelOpen(false)}
+            actions={
+              <Link
+                className="btn primary"
+                to={`/customers/${selectedCustomerId}`}
+              >
+                Open customer
+              </Link>
+            }
+          >
+            {selectedCustomer.isLoading ? (
+              <p>Loading customer…</p>
+            ) : selectedCustomer.isError ? (
+              <p role="alert">Could not load customer details.</p>
+            ) : customerTab === 'Overview' ? (
+              <>
+                <h3>Company information</h3>
+                <CrmFacts
+                  items={[
+                    {
+                      label: 'Company name',
+                      value: selectedCustomer.data?.companyName,
+                    },
+                    {
+                      label: 'Customer type',
+                      value: selectedCustomer.data?.customerType?.replaceAll(
+                        '_',
+                        ' ',
+                      ),
+                    },
+                    { label: 'Country', value: selectedCustomer.data?.country },
+                    { label: 'Status', value: selectedCustomer.data?.status },
+                    { label: 'Primary contact', value: selectedCustomer.data?.primaryContact?.name },
+                    {
+                      label: 'Email',
+                      value: selectedCustomer.data?.primaryContact?.email,
+                    },
+                    {
+                      label: 'Phone',
+                      value: selectedCustomer.data?.primaryContact?.phone,
+                    },
+                    {
+                      label: 'Address',
+                      value: selectedCustomer.data?.addresses?.[0]?.line1,
+                    },
+                  ]}
+                />
+              </>
+            ) : customerTab === 'Contacts' ? (
+              <div className="crm-panel-list">
+                {selectedCustomer.data?.contacts?.length
+                  ? selectedCustomer.data.contacts.map((contact: any) => (
+                      <div key={contact.id}>
+                        <strong>{contact.name}</strong>
+                        <small>{contact.email}</small>
+                      </div>
+                    ))
+                  : 'No contacts available.'}
+              </div>
+            ) : customerTab === 'Quotations' ? (
+              <div className="crm-panel-list">
+                {selectedCustomer.data?.recentQuotations?.length
+                  ? selectedCustomer.data.recentQuotations.map((quote: any) => (
+                      <Link key={quote.id} to={`/quotations/${quote.id}`}>
+                        {quote.quotationNumber}
+                      </Link>
+                    ))
+                  : 'No recent quotations.'}
+              </div>
+            ) : (
+              <div className="crm-panel-list">
+                {selectedCustomer.data?.recentEnquiries?.length
+                  ? selectedCustomer.data.recentEnquiries.map(
+                      (enquiry: any) => (
+                        <Link key={enquiry.id} to={`/enquiries/${enquiry.id}`}>
+                          {enquiry.enquiryCode}
+                        </Link>
+                      ),
+                    )
+                  : 'No recent enquiries.'}
+              </div>
+            )}
+          </CrmDetailPanel>
+          </>
         )}
       </div>
     </div>

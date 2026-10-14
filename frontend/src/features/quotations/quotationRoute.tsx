@@ -74,8 +74,10 @@ export function useResolvedFinalPlace(
 
 export function QuotationRouteLabel({
   shipment,
+  compact = false,
 }: {
   shipment: Record<string, any> | null;
+  compact?: boolean;
 }) {
   const finalName = useResolvedFinalPlace(
     shipment?.fpodCode,
@@ -85,5 +87,14 @@ export function QuotationRouteLabel({
     ...shipment,
     fpodName: finalName,
   });
+  if (compact)
+    return (
+      <span className="quote-directory-route" title={route.label} tabIndex={0}>
+        <span>
+          {route.loading} → {route.discharge}
+        </span>
+        {route.finalPlace && <small>Final: {route.finalPlace}</small>}
+      </span>
+    );
   return <>{route.label}</>;
 }

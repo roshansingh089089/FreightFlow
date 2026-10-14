@@ -11,11 +11,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class AiShipmentServiceTest {
   final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -323,6 +325,9 @@ class AiShipmentServiceTest {
             () -> client.generate("instruction", "input", Map.of("type", "object")));
     assertEquals("AI_PROVIDER_ERROR", error.code);
     assertFalse(error.getMessage().contains("test-key"));
+    ArgumentCaptor<HttpRequest> request = ArgumentCaptor.forClass(HttpRequest.class);
+    verify(http).send(request.capture(), any(HttpResponse.BodyHandler.class));
+    assertEquals(Duration.ofSeconds(20), request.getValue().timeout().orElseThrow());
   }
 
   @Test

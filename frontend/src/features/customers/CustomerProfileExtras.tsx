@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import { z } from 'zod';
+import { FormSearchableSelect } from '../../shared/components/FormSearchableSelect';
 import { mailApi } from '../mail/mailApi';
 import {
   customerProfileApi,
@@ -340,14 +341,11 @@ export function CustomerAddressesPanel({
         <h4 className="md:col-span-2 font-semibold">
           {editing ? 'Edit address' : 'Add address'}
         </h4>
-        <label>
-          Type
-          <select className="field" {...form.register('addressType')}>
-            <option value="REGISTERED">Registered</option>
-            <option value="BILLING">Billing</option>
-            <option value="BUSINESS">Business</option>
-          </select>
-        </label>
+        <FormSearchableSelect form={form} name="addressType" label="Type" options={[
+          { value: 'REGISTERED', label: 'Registered' },
+          { value: 'BILLING', label: 'Billing' },
+          { value: 'BUSINESS', label: 'Business' },
+        ]} />
         <label>
           Address line 1<input className="field" {...form.register('line1')} />
         </label>

@@ -80,6 +80,146 @@ afterEach(() => {
 });
 
 describe('email composer', () => {
+  it('moves from its header while keeping header controls and draft fields usable', () => {
+    mount();
+    const composer = screen.getByRole('dialog', { name: 'Email composer' });
+    const header = composer.querySelector(
+      '.email-composer-header',
+    ) as HTMLElement;
+    composer.getBoundingClientRect = () => ({
+      left: 200,
+      top: 150,
+      width: 520,
+      height: 450,
+      right: 720,
+      bottom: 600,
+      x: 200,
+      y: 150,
+      toJSON: () => ({}),
+    });
+    const pointer = (type: string, target: Element, x: number, y: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, {
+        pointerId: { value: 1 },
+        button: { value: 0 },
+        clientX: { value: x },
+        clientY: { value: y },
+      });
+      fireEvent(target, event);
+    };
+    pointer('pointerdown', header, 220, 170);
+    pointer('pointermove', header, 320, 270);
+    pointer('pointerup', header, 320, 270);
+    expect(composer.style.left).toBe('300px');
+    expect(composer.style.top).toBe('250px');
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'New subject' },
+    });
+    expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe(
+      'New subject',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize composer' }));
+    expect(
+      screen.getByRole('button', { name: 'Restore composer' }),
+    ).toBeTruthy();
+  });
+  it('resizes the popup from its corner and preserves the draft fields', () => {
+    mount();
+    const composer = screen.getByRole('dialog', { name: 'Email composer' });
+    composer.getBoundingClientRect = () => ({
+      left: 200,
+      top: 150,
+      width: 520,
+      height: 450,
+      right: 720,
+      bottom: 600,
+      x: 200,
+      y: 150,
+      toJSON: () => ({}),
+    });
+    const handle = screen.getByRole('button', {
+      name: 'Resize email composer width and height',
+    });
+    const pointer = (type: string, x: number, y: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, {
+        pointerId: { value: 2 },
+        button: { value: 0 },
+        clientX: { value: x },
+        clientY: { value: y },
+      });
+      fireEvent(handle, event);
+    };
+    pointer('pointerdown', 720, 600);
+    pointer('pointermove', 820, 650);
+    pointer('pointerup', 820, 650);
+    expect(composer.style.width).toBe('620px');
+    expect(composer.style.height).toBe('500px');
+    expect(screen.getByLabelText('Message')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand composer' }));
+    expect(
+      screen.queryByRole('button', {
+        name: 'Resize email composer width and height',
+      }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Restore composer size' }),
+    );
+    expect(composer.style.width).toBe('620px');
+  });
+  it('offers width, height, and corner resize targets', () => {
+    mount();
+    const composer = screen.getByRole('dialog', { name: 'Email composer' });
+    composer.getBoundingClientRect = () => ({
+      left: 200,
+      top: 150,
+      width: 520,
+      height: 450,
+      right: 720,
+      bottom: 600,
+      x: 200,
+      y: 150,
+      toJSON: () => ({}),
+    });
+    expect(
+      screen
+        .getByRole('button', { name: 'Resize email composer width' })
+        .getAttribute('data-resize'),
+    ).toBe('x');
+    expect(
+      screen
+        .getByRole('button', { name: 'Resize email composer height' })
+        .getAttribute('data-resize'),
+    ).toBe('y');
+    expect(
+      screen
+        .getByRole('button', { name: 'Resize email composer width and height' })
+        .getAttribute('data-resize'),
+    ).toBe('both');
+    const dragHandle = (name: string, x: number, y: number) => {
+      const handle = screen.getByRole('button', { name });
+      for (const [type, clientX, clientY] of [
+        ['pointerdown', 720, 600],
+        ['pointermove', x, y],
+        ['pointerup', x, y],
+      ] as const) {
+        const event = new Event(type, { bubbles: true });
+        Object.defineProperties(event, {
+          pointerId: { value: 3 },
+          button: { value: 0 },
+          clientX: { value: clientX },
+          clientY: { value: clientY },
+        });
+        fireEvent(handle, event);
+      }
+    };
+    dragHandle('Resize email composer width', 620, 650);
+    expect(composer.style.width).toBe('420px');
+    expect(composer.style.height).toBe('450px');
+    dragHandle('Resize email composer height', 820, 500);
+    expect(composer.style.width).toBe('520px');
+    expect(composer.style.height).toBe('350px');
+  });
   it('sends the existing quotation draft after editing without losing its PDF or identity', async () => {
     const quotationDraft: Draft = {
       ...reply,

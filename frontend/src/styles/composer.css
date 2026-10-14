@@ -17,11 +17,38 @@
   align-items: flex-end;
   justify-content: flex-end;
   padding: 16px 24px;
-  background: rgb(34 27 39 / 22%);
+  background: transparent;
   pointer-events: none;
 }
 .mail-composer-workspace .email-composer {
   pointer-events: auto;
+}
+.mail-floating-composer.ff-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  max-width: none;
+  background: transparent;
+  pointer-events: none;
+}
+.mail-floating-composer .email-composer {
+  pointer-events: auto;
+}
+@media (max-width: 620px) {
+  .mail-floating-composer.ff-page {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .mail-floating-composer
+    .email-composer.email-composer-compact:not(.is-minimized) {
+    width: 100%;
+    height: min(88dvh, 720px);
+    border-radius: 16px 16px 0 0;
+  }
 }
 .app-main:has(.email-composer) {
   min-height: 0;
@@ -32,25 +59,118 @@
   max-width: none;
 }
 .ff-page .email-composer.email-composer-compact {
+  position: relative;
   display: flex;
   flex-direction: column;
-  width: min(100%, 680px);
+  width: min(100%, 520px);
   max-width: none;
-  height: min(540px, calc(100dvh - 32px));
+  height: min(450px, calc(100dvh - 32px));
   min-height: 0;
   margin: 0;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--ff-border);
-  border-radius: var(--ff-radius-card);
+  border-radius: 12px;
   background: var(--ff-surface);
-  box-shadow: var(--ff-shadow-soft);
+  box-shadow: 0 14px 42px #172c3130;
   color: var(--ff-text);
   font-size: 13px;
   box-sizing: border-box;
 }
+.ff-page .email-composer .email-composer-resize {
+  position: absolute;
+  z-index: 4;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: none;
+}
+.ff-page .email-composer .email-composer-resize::after {
+  content: '';
+  position: absolute;
+  border-radius: 99px;
+  background: #9aada5;
+  transition:
+    background 150ms ease,
+    transform 150ms ease;
+}
+.ff-page
+  .email-composer
+  .email-composer-resize:is(:hover, :focus-visible)::after,
+.ff-page
+  .email-composer:has(.email-composer-resize:hover)
+  .email-composer-resize::after {
+  background: var(--ff-primary);
+  transform: scale(1.15);
+}
+.ff-page .email-composer .email-composer-resize-x {
+  top: 40px;
+  right: 0;
+  bottom: 28px;
+  width: 10px;
+  cursor: ew-resize;
+}
+.ff-page .email-composer .email-composer-resize-x::after {
+  top: calc(50% - 14px);
+  right: 3px;
+  width: 4px;
+  height: 28px;
+}
+.ff-page .email-composer .email-composer-resize-y {
+  bottom: 0;
+  left: 0;
+  right: 28px;
+  height: 10px;
+  cursor: ns-resize;
+}
+.ff-page .email-composer .email-composer-resize-y::after {
+  bottom: 3px;
+  left: calc(50% - 14px);
+  width: 28px;
+  height: 4px;
+}
+.ff-page .email-composer .email-composer-resize-both {
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  height: 28px;
+  cursor: nwse-resize;
+}
+.ff-page .email-composer .email-composer-resize-both::after {
+  right: 5px;
+  bottom: 5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 42%,
+    #79998a 44%,
+    #79998a 53%,
+    transparent 55%,
+    transparent 67%,
+    #79998a 69%,
+    #79998a 78%,
+    transparent 80%
+  );
+}
+.ff-page
+  .email-composer
+  .email-composer-resize-both:is(:hover, :focus-visible)::after {
+  background: linear-gradient(
+    135deg,
+    transparent 42%,
+    var(--ff-primary) 44%,
+    var(--ff-primary) 53%,
+    transparent 55%,
+    transparent 67%,
+    var(--ff-primary) 69%,
+    var(--ff-primary) 78%,
+    transparent 80%
+  );
+}
 .ff-page .email-composer.is-expanded {
-  width: min(100%, 980px);
+  width: min(100%, 900px);
   height: calc(100dvh - 32px);
 }
 .ff-page .email-composer.is-minimized {
@@ -64,11 +184,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 48px;
+  min-height: 40px;
   margin: 0;
-  padding: 8px 16px;
+  padding: 5px 12px;
   border-bottom: 1px solid var(--ff-border);
   background: var(--ff-surface-muted);
+  cursor: grab;
+  touch-action: none;
+}
+.ff-page .email-composer > .email-composer-header:active {
+  cursor: grabbing;
+}
+.ff-page .email-composer > .email-composer-header nav {
+  cursor: default;
 }
 .ff-page .email-composer-heading {
   display: flex;
@@ -79,7 +207,7 @@
 .ff-page .email-composer .email-composer-heading h1 {
   margin: 0;
   color: var(--ff-text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 750;
   letter-spacing: 0;
   white-space: nowrap;
@@ -108,8 +236,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -142,15 +270,15 @@
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 16px;
+  padding: 3px 12px;
   border-bottom: 1px solid var(--ff-border);
 }
 .ff-page .email-address-row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 41px;
+  min-height: 36px;
 }
 .ff-page .email-address-row + .email-address-row,
 .ff-page .email-copy-fields .email-address-row {
@@ -161,11 +289,11 @@
   font-size: 12px;
   font-weight: 650;
 }
-.ff-page .email-address-row input {
+.ff-page .email-composer.email-composer-compact .email-address-row input {
   min-width: 0;
-  min-height: 36px;
-  height: 36px;
-  padding: 6px 8px;
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 6px;
   border: 1px solid transparent;
   box-shadow: none;
   font-size: 13px;
@@ -174,8 +302,8 @@
   border-color: var(--ff-primary);
 }
 .ff-page .email-address-row .ui-button {
-  min-height: 30px;
-  padding: 5px 8px;
+  min-height: 27px;
+  padding: 4px 7px;
 }
 .ff-page .email-auto-cc,
 .ff-page .email-warning {
@@ -189,9 +317,9 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  padding: 8px 16px;
+  padding: 7px 12px;
 }
-.ff-page .email-editor textarea {
+.ff-page .email-composer.email-composer-compact .email-editor textarea {
   flex: 1;
   width: 100%;
   min-width: 0;
@@ -203,8 +331,8 @@
   border: 0;
   outline-offset: -2px;
   color: var(--ff-text);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .ff-page .email-composer-extras {
   flex: 0 1 auto;
@@ -221,7 +349,7 @@
 .ff-page .email-ai-toolbar {
   flex: none;
   min-width: 0;
-  padding: 5px 16px;
+  padding: 4px 12px;
   border-bottom: 1px solid var(--ff-border);
   background: var(--ff-surface-muted);
 }
@@ -234,8 +362,8 @@
   min-width: 0;
 }
 .ff-page .email-ai-toolbar .ui-button {
-  min-height: 30px;
-  padding: 5px 8px;
+  min-height: 27px;
+  padding: 4px 7px;
   font-size: 12px;
 }
 .ff-page .email-ai-assist {
@@ -287,10 +415,10 @@
   align-items: center;
   flex: none;
   flex-wrap: nowrap;
-  gap: 8px;
-  min-height: 57px;
+  gap: 6px;
+  min-height: 48px;
   margin: 0;
-  padding: 9px 16px;
+  padding: 7px 12px;
   border-top: 1px solid var(--ff-border);
   background: var(--ff-surface);
 }
@@ -302,8 +430,8 @@
 }
 .ff-page .email-composer-footer .ui-button,
 .ff-page .email-composer-footer .email-file {
-  min-height: 36px;
-  padding: 7px 12px;
+  min-height: 32px;
+  padding: 5px 9px;
   border-radius: var(--ff-radius-sm);
   font-size: 12px;
 }

@@ -1,0 +1,29 @@
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+  <springProfile name="local">
+    <appender name="AI_DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+      <file>logs/ai-debug.log</file>
+      <append>true</append>
+      <encoder>
+        <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{36} %msg%n</pattern>
+      </encoder>
+      <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+        <fileNamePattern>logs/ai-debug.%i.log.gz</fileNamePattern>
+        <minIndex>1</minIndex>
+        <maxIndex>5</maxIndex>
+      </rollingPolicy>
+      <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+        <maxFileSize>10MB</maxFileSize>
+      </triggeringPolicy>
+    </appender>
+    <logger name="com.freightflow.ai" level="DEBUG" additivity="true">
+      <appender-ref ref="AI_DEBUG_FILE" />
+    </logger>
+  </springProfile>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE" />
+  </root>
+</configuration>

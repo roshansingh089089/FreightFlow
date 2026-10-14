@@ -24,6 +24,7 @@ import {
   CustomerUsersPanel,
 } from './CustomerProfileExtras';
 import { customerPayload, customerSchema } from './customerForm';
+import { FormSearchableSelect } from '../../shared/components/FormSearchableSelect';
 export function CustomerForm() {
   const nav = useNavigate();
   const { id } = useParams();
@@ -42,6 +43,11 @@ export function CustomerForm() {
   const owners = useQuery({
     queryKey: ['tenant-users'],
     queryFn: () => api('/tenant/users'),
+  });
+  const countries = useQuery<{ code: string; name: string }[]>({
+    queryKey: ['reference-countries'],
+    queryFn: () => api('/reference/countries'),
+    staleTime: 86_400_000,
   });
   const form = useForm<any>({
     resolver: zodResolver(customerSchema),
@@ -338,25 +344,17 @@ export function CustomerForm() {
           </h2>
           <div className="customer-form-fields">
             <Field form={form} name="companyName" label="Company Name *" />
-            <label>
-              <span className="label">Customer Type *</span>
-              <select className="field" {...form.register('customerType')}>
-                <option value="">Select type</option>
-                {['EXPORTER', 'IMPORTER', 'FREIGHT_PARTNER', 'OTHER'].map(
-                  (x) => (
-                    <option key={x}>{x}</option>
-                  ),
-                )}
-              </select>
-            </label>
-            <Field form={form} name="country" label="Country *" />
-            <label>
-              <span className="label">Status</span>
-              <select className="field" {...form.register('status')}>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
-            </label>
+            <FormSearchableSelect form={form} name="customerType" label="Customer Type" required placeholder="Select type" options={[
+              { value: 'EXPORTER', label: 'Exporter' },
+              { value: 'IMPORTER', label: 'Importer' },
+              { value: 'FREIGHT_PARTNER', label: 'Freight Partner' },
+              { value: 'OTHER', label: 'Other' },
+            ]} />
+            <FormSearchableSelect form={form} name="country" label="Country" required placeholder="Select country" loading={countries.isLoading} options={[
+              ...(form.watch('country') && !((Array.isArray(countries.data) ? countries.data : []).some((country) => country.name === form.watch('country'))) ? [{ value: String(form.watch('country')), label: String(form.watch('country')) }] : []),
+              ...(Array.isArray(countries.data) ? countries.data : []).map((country) => ({ value: country.name, label: `${country.name} (${country.code})`, keywords: country.code, countryCode: country.code })),
+            ]} />
+            <FormSearchableSelect form={form} name="status" label="Status" options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }]} />
           </div>
         </section>
         <section
@@ -410,17 +408,7 @@ export function CustomerForm() {
               label="Credit limit"
               type="number"
             />
-            <label>
-              <span className="label">Account owner</span>
-              <select className="field" {...form.register('salesOwnerUserId')}>
-                <option value="">Assign to me</option>
-                {owners.data?.map((owner: any) => (
-                  <option key={owner.id} value={owner.id}>
-                    {owner.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <FormSearchableSelect form={form} name="salesOwnerUserId" label="Account owner" placeholder="Assign to me" allowClear loading={owners.isLoading} options={(owners.data || []).map((owner: any) => ({ value: owner.id, label: owner.fullName }))} />
           </div>
         </section>
         {!id &&

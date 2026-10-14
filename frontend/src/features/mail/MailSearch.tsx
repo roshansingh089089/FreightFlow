@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { mailApi } from './mailApi';
+import { SearchableSelect } from '../../shared/components/SearchableSelect';
 
 export default function MailSearch() {
   const [subject, setSubject] = useState('');
@@ -59,40 +60,11 @@ export default function MailSearch() {
         {field('Recipient', recipient, setRecipient)}
         <label>
           Direction
-          <select
-            value={direction}
-            onChange={(event) => {
-              setDirection(event.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="">All</option>
-            <option value="INBOUND">Received</option>
-            <option value="OUTBOUND">Outgoing</option>
-          </select>
+          <SearchableSelect ariaLabel="Direction" value={direction} onChange={(next) => { setDirection(next); setPage(0); }} placeholder="All" allowClear options={[{ value: 'INBOUND', label: 'Received' }, { value: 'OUTBOUND', label: 'Outgoing' }]} />
         </label>
         <label>
           Status
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="">All</option>
-            {[
-              'RECEIVED',
-              'DRAFT',
-              'QUEUED',
-              'SENDING',
-              'SENT',
-              'NEEDS_REVIEW',
-              'FAILED',
-            ].map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
+          <SearchableSelect ariaLabel="Status" value={status} onChange={(next) => { setStatus(next); setPage(0); }} placeholder="All" allowClear options={['RECEIVED', 'DRAFT', 'QUEUED', 'SENDING', 'SENT', 'NEEDS_REVIEW', 'FAILED'].map((value) => ({ value, label: value.replaceAll('_', ' ') }))} />
         </label>
         <label>
           From

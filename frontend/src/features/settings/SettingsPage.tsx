@@ -6,6 +6,7 @@ import {
   State,
 } from '../../shared/components/PageElements';
 import { api, post, useData } from '../../shared/lib/workspace';
+import { SearchableSelect } from '../../shared/components/SearchableSelect';
 import {
   getCurrentMailConnection,
   mailConnectionKey,
@@ -227,14 +228,7 @@ export function SettingsPage() {
   ) => (
     <label key={key}>
       <span className="label">{label}</span>
-      <select
-        className="field"
-        value={form[key]}
-        onChange={(event) => change(key, event.target.value)}
-      >
-        <option value="IMPLICIT_TLS">Implicit TLS</option>
-        <option value="STARTTLS">STARTTLS</option>
-      </select>
+      <SearchableSelect ariaLabel={label} value={form[key]} onChange={(value) => change(key, value)} options={[{ value: 'IMPLICIT_TLS', label: 'Implicit TLS' }, { value: 'STARTTLS', label: 'STARTTLS' }]} />
     </label>
   );
   const providerLabel =
@@ -279,16 +273,7 @@ export function SettingsPage() {
             )}
             <label className="block mt-4">
               <span className="label">Provider</span>
-              <select
-                className="field"
-                value={provider}
-                onChange={(event) =>
-                  choose(event.target.value as 'HOSTINGER' | 'GENERIC')
-                }
-              >
-                <option value="HOSTINGER">Hostinger Email</option>
-                <option value="GENERIC">Other IMAP/SMTP</option>
-              </select>
+              <SearchableSelect ariaLabel="Provider" value={provider} onChange={(value) => choose(value as 'HOSTINGER' | 'GENERIC')} options={[{ value: 'HOSTINGER', label: 'Hostinger Email' }, { value: 'GENERIC', label: 'Other IMAP/SMTP' }]} />
             </label>
             <form className="mailbox-form mt-4" onSubmit={save}>
               <div className="mailbox-fields">

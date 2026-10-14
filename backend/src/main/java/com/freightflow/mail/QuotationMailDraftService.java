@@ -2,7 +2,9 @@ package com.freightflow.mail;
 
 import com.freightflow.common.exception.ApiException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,25 @@ public class QuotationMailDraftService {
   QuotationMailDraftService(OutboundMailService drafts, MailAttachmentService attachments) {
     this.drafts = drafts;
     this.attachments = attachments;
+  }
+
+  @Transactional
+  public Map<String, Object> submitLegacy(
+      UUID quotationId,
+      UUID customerId,
+      String filename,
+      Supplier<byte[]> pdf,
+      String to,
+      String cc,
+      String subject,
+      String body,
+      String key) {
+    drafts.lockQuotationForLegacy(quotationId);
+    DraftResponse existing = drafts.existingSubmission(key, quotationId);
+    if (existing != null) return Map.of("status", existing.status(), "draftId", existing.id());
+    UUID id = create(quotationId, customerId, filename, pdf.get(), to, cc, subject, body, null);
+    DraftResponse queued = drafts.queue(id, key);
+    return Map.of("status", queued.status(), "draftId", queued.id());
   }
 
   @Transactional

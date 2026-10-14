@@ -14,13 +14,28 @@ public class LocationSearchService {
   }
 
   public record LocationView(
-      String code, String name, String countryCode, String functions, String sourceVersion) {
+      String code,
+      String name,
+      String countryCode,
+      String countryName,
+      List<String> locationTypes,
+      String functions,
+      String sourceVersion) {
     static LocationView of(Location location) {
+      String countryCode = location.getCountryCode();
+      String countryName = Locale.of("", countryCode).getDisplayCountry(Locale.ENGLISH);
+      String functions = location.getFunctions() == null ? "" : location.getFunctions();
+      List<String> locationTypes = new java.util.ArrayList<>();
+      if (functions.startsWith("1")) locationTypes.add("PORT");
+      if (functions.length() >= 4 && functions.charAt(3) == '4') locationTypes.add("AIRPORT");
+      if (locationTypes.isEmpty()) locationTypes.add("PLACE");
       return new LocationView(
           location.getCode(),
           location.getName(),
-          location.getCountryCode(),
-          location.getFunctions(),
+          countryCode,
+          countryName.isBlank() ? countryCode : countryName,
+          locationTypes,
+          functions,
           location.getSourceVersion());
     }
   }

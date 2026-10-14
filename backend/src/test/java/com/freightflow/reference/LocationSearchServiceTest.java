@@ -19,6 +19,8 @@ class LocationSearchServiceTest {
     when(repository.search("mumbai", "SEA")).thenReturn(List.of(first, second));
     var results = new LocationSearchService(repository).search("Mumbai", "OCEAN");
     assertEquals(2, results.size());
+    assertEquals("India", results.get(0).countryName());
+    assertEquals(List.of("PORT"), results.get(0).locationTypes());
   }
 
   @Test

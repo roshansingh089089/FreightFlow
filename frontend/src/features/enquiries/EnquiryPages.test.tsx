@@ -8,19 +8,41 @@ import {
 } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, post } from '../../shared/lib/workspace';
-import { EnquiryForm } from './EnquiryPages';
+import { api, post, useData } from '../../shared/lib/workspace';
+import { Enquiries, EnquiryForm } from './EnquiryPages';
 
 const customerId = '11111111-1111-4111-8111-111111111111';
 
 vi.mock('../../shared/lib/workspace', () => ({
-  useData: () => ({
-    data: {
-      content: [
-        { id: '11111111-1111-4111-8111-111111111111', companyName: 'Acme' },
-      ],
-    },
-  }),
+  useData: vi.fn((key: string) => ({
+    data:
+      key === 'enquiries'
+        ? {
+            content: [
+              {
+                id: 'enquiry-1',
+                enquiryCode: 'ENQ-001',
+                customerName: 'Acme',
+                mode: 'OCEAN',
+                origin: 'Mumbai',
+                destination: 'Bangkok',
+                commodity: 'Machinery',
+                status: 'NEW',
+                createdAt: '2026-10-11',
+              },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+          }
+        : {
+            content: [
+              {
+                id: '11111111-1111-4111-8111-111111111111',
+                companyName: 'Acme',
+              },
+            ],
+          },
+  })),
   api: vi.fn(async (path: string) => {
     if (path === '/mail/messages/22222222-2222-4222-8222-222222222222')
       return {
@@ -96,6 +118,49 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('enquiry directory', () => {
+  it('keeps server filters and clears them without changing pagination behavior', () => {
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <MemoryRouter>
+          <Enquiries />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('Search enquiries'), {
+      target: { value: 'Acme' },
+    });
+    expect(useData).toHaveBeenCalledWith(
+      'enquiries',
+      expect.stringContaining('search=Acme'),
+    );
+    fireEvent.change(screen.getByLabelText('Created from'), {
+      target: { value: '2026-10-01' },
+    });
+    expect(useData).toHaveBeenCalledWith(
+      'enquiries',
+      expect.stringContaining('from=2026-10-01'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(useData).toHaveBeenCalledWith(
+      'enquiries',
+      expect.stringContaining('search=&status=&mode=&from='),
+    );
+    expect(
+      screen.getByRole('link', { name: 'ENQ-001' }).getAttribute('href'),
+    ).toBe('/enquiries/enquiry-1');
+    expect(screen.getByRole('button', { name: 'Close details' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close details' }));
+    expect(screen.queryByRole('button', { name: 'Close details' })).toBeNull();
+    fireEvent.click(screen.getByText('Acme'));
+    expect(screen.getByRole('button', { name: 'Close details' })).toBeTruthy();
+  });
 });
 
 describe('single-page enquiry intake', () => {
